@@ -1,0 +1,80 @@
+[
+  {
+    "name": "dice-roll",
+    "seconds": 2,
+    "prompt": "Five wooden dice shaken in a leather cup and spilled onto a felt-covered wooden table, rattling and settling with soft knocks.",
+    "event": "roll"
+  },
+  {
+    "name": "die-hold",
+    "seconds": 1,
+    "prompt": "A single wooden die pressed down firmly onto a felt table with a soft muted thud.",
+    "event": "hold"
+  },
+  {
+    "name": "die-release",
+    "seconds": 1,
+    "prompt": "A single wooden die lifted off a felt table with a faint tacky fabric release and a light tap.",
+    "event": "hold"
+  },
+  {
+    "name": "score-points",
+    "seconds": 2,
+    "prompt": "A small brass scoring bell chiming once over a warm wooden counter knock, cheerful and satisfying.",
+    "event": "score"
+  },
+  {
+    "name": "score-avalanche",
+    "seconds": 3,
+    "prompt": "A cascading tumble of small stones and wooden tokens clattering down a wooden chute, bright and celebratory.",
+    "event": "score"
+  },
+  {
+    "name": "score-zero",
+    "seconds": 1,
+    "prompt": "A dull single knock of a wooden token set down on a felt table, flat and disappointing.",
+    "event": "score"
+  },
+  {
+    "name": "turn-start",
+    "seconds": 1,
+    "prompt": "A soft wooden card sliding across a felt table and stopping with a gentle tap.",
+    "event": "turn"
+  },
+  {
+    "name": "invalid-move",
+    "seconds": 1,
+    "prompt": "A short muted knock of a wooden game piece bumped sideways against a table edge, dull and disapproving.",
+    "event": "invalid"
+  },
+  {
+    "name": "finish-cards",
+    "seconds": 3,
+    "prompt": "A triumphant cascade of small brass bells and wooden chimes ringing out over a cozy crackling fireplace.",
+    "event": "finish"
+  },
+  {
+    "name": "finish-table",
+    "seconds": 2,
+    "prompt": "Two soft wooden mallets striking a marimba in a gentle descending phrase, warm and conclusive.",
+    "event": "finish"
+  },
+  {
+    "name": "hint-chime",
+    "seconds": 1,
+    "prompt": "A single delicate glass chime note with a soft shimmer, light and suggestive.",
+    "event": "hint"
+  },
+  {
+    "name": "undo-sweep",
+    "seconds": 1,
+    "prompt": "A quick reversed paper-and-felt whoosh, like a card being swept back across a table.",
+    "event": "undo"
+  },
+  {
+    "name": "ui-click",
+    "seconds": 1,
+    "prompt": "A short crisp tap of a fingernail on a small polished wooden button.",
+    "event": "uiClick"
+  }
+]

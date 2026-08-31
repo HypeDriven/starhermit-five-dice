@@ -1,0 +1,254 @@
+/* Five Dice — responsive shell. Theme colors are CSS variables set from the
+   active content theme (js/ui.js); gameplay colors are reinforced with labels
+   and shapes, never color alone. */
+
+:root {
+  color-scheme: dark;
+  --felt: #3e5c4b; --wood: #6b4a2f; --wall: #2e2118; --accent: #e8a54b;
+  --select: #7fc8a9; --legal: #8fd6a0; --danger: #d95745;
+  --text: #f2e9da; --page: #241a12; --panel: #2c2016; --panel-2: #382a1c;
+  --line: rgba(255, 255, 255, 0.12);
+  --font-size: 1rem;
+  --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px);
+}
+body.high-contrast { --line: rgba(255,255,255,0.45); }
+body.large-text { --font-size: 1.18rem; }
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  background: var(--wall); color: var(--text);
+  font-family: "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: var(--font-size); line-height: 1.45; -webkit-font-smoothing: antialiased;
+}
+body.high-contrast { filter: contrast(1.08); }
+
+.visually-hidden {
+  position: absolute !important; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
+.skip-link {
+  position: absolute; left: -999px; top: 0; z-index: 200;
+  background: var(--accent); color: #1c1208; padding: 0.5rem 1rem; border-radius: 0 0 0.5rem 0;
+}
+.skip-link:focus { left: 0; }
+
+button { font: inherit; color: inherit; }
+button:focus-visible, [tabindex]:focus-visible, a:focus-visible {
+  outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 0.3rem;
+}
+
+#app { display: flex; flex-direction: column; height: 100dvh; }
+
+/* --- top bar ---------------------------------------------------------------- */
+#topbar {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: calc(0.45rem + var(--sat)) calc(0.9rem + var(--sar)) 0.45rem calc(0.9rem + var(--sal));
+  background: var(--page); border-bottom: 1px solid var(--line);
+}
+.game-title { font-size: 1.25rem; letter-spacing: 0.04em; color: var(--accent); }
+.session-status { flex: 1; font-size: 0.9em; opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar-actions { display: flex; gap: 0.4rem; }
+.icon-btn {
+  min-width: 44px; min-height: 44px; border: 1px solid var(--line); border-radius: 0.5rem;
+  background: transparent; font-size: 1.05rem; cursor: pointer;
+}
+.icon-btn:hover { background: var(--panel-2); }
+
+/* --- layout ------------------------------------------------------------------- */
+#layout {
+  flex: 1; display: grid; grid-template-columns: minmax(240px, 320px) 1fr minmax(220px, 300px);
+  min-height: 0; position: relative;
+}
+#stage { position: relative; min-width: 0; min-height: 0; }
+#dice-stage { width: 100%; height: 100%; display: block; touch-action: none; }
+.compat-message {
+  position: absolute; inset: 20% 10%; display: flex; align-items: center; justify-content: center;
+  text-align: center; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 0.8rem; padding: 1.2rem; z-index: 4;
+}
+
+.rail {
+  overflow-y: auto; padding: 0.7rem; background: var(--page);
+  border-right: 1px solid var(--line);
+}
+#rail-right { border-right: none; border-left: 1px solid var(--line); }
+.rail h2 { font-size: 1rem; color: var(--accent); margin-bottom: 0.4rem; }
+.rail section + section { margin-top: 1rem; }
+
+/* --- scorecard ------------------------------------------------------------------ */
+.scorecard { width: 100%; border-collapse: collapse; font-size: 0.92em; }
+.scorecard caption { text-align: left; font-weight: 600; margin-bottom: 0.3rem; color: var(--accent); }
+.scorecard th, .scorecard td { padding: 0.28rem 0.4rem; text-align: left; }
+.scorecard td.points, .scorecard th.points { text-align: right; font-variant-numeric: tabular-nums; }
+.scorecard tr.section-head th { color: var(--accent); font-size: 0.85em; padding-top: 0.5rem; }
+.scorecard tr.totals td { border-top: 1px solid var(--line); font-weight: 600; }
+.scorecard button.cat {
+  width: 100%; display: flex; justify-content: space-between; gap: 0.5rem; align-items: baseline;
+  background: none; border: none; border-radius: 0.35rem; padding: 0.28rem 0.4rem;
+  cursor: default; text-align: left;
+}
+.scorecard button.cat .nm { overflow-wrap: anywhere; }
+.scorecard button.cat .pv { font-variant-numeric: tabular-nums; opacity: 0.9; }
+.scorecard button.cat.legal { cursor: pointer; }
+.scorecard button.cat.legal .pv { color: var(--legal); font-weight: 700; }
+.scorecard button.cat.legal::after { content: " ◆"; color: var(--legal); }
+.scorecard button.cat.legal:hover, .scorecard button.cat.legal:focus-visible { background: var(--panel-2); }
+.scorecard button.cat:disabled { opacity: 0.75; }
+.scorecard tr.row-closed td { opacity: 0.65; }
+.scorecard .closed-val { text-align: right; font-variant-numeric: tabular-nums; }
+.bonus-meter { font-size: 0.85em; margin-top: 0.35rem; opacity: 0.9; }
+
+/* --- dice tray (DOM mirror of the 3D dice) -------------------------------------- */
+.dice-tray {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: calc(0.8rem + var(--sab)); display: flex; gap: 8px; z-index: 3;
+}
+.die-btn {
+  width: 52px; height: 52px; border-radius: 0.55rem; border: 2px solid var(--line);
+  background: #f4ead8; color: #33241a; font-size: 1.5rem; font-weight: 700; cursor: pointer;
+  display: grid; place-items: center; position: relative;
+}
+.die-btn .pip { font-size: 1.6rem; line-height: 1; }
+.die-btn.held { border-color: var(--select); transform: translateY(-8px); }
+.die-btn.held::after { content: "HELD"; position: absolute; bottom: -1.15rem; left: 0; right: 0;
+  font-size: 0.55rem; letter-spacing: 0.08em; color: var(--select); }
+.die-btn:disabled { opacity: 0.55; cursor: default; transform: none; }
+body.high-contrast .die-btn.held { outline: 3px dashed var(--select); outline-offset: 2px; }
+
+/* --- action tray / right rail ----------------------------------------------------- */
+.action-tray {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: calc(4.6rem + var(--sab)); display: flex; gap: 8px; z-index: 3;
+}
+.btn {
+  min-height: 44px; min-width: 44px; border: none; border-radius: 0.55rem;
+  padding: 0.55rem 1.1rem; cursor: pointer; font-weight: 600;
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+}
+.btn:hover { filter: brightness(1.12); }
+.btn.primary { background: var(--accent); color: #1c1208; border-color: transparent; }
+.btn.danger { background: var(--danger); color: #fff; border-color: transparent; }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.actions-stack { display: flex; flex-direction: column; gap: 0.5rem; }
+.actions-stack .btn { width: 100%; }
+
+.player-list { list-style: none; display: flex; flex-direction: column; gap: 0.35rem; }
+.player-list li {
+  display: flex; justify-content: space-between; gap: 0.5rem;
+  padding: 0.35rem 0.5rem; border-radius: 0.4rem; border: 1px solid transparent;
+}
+.player-list li.current { border-color: var(--accent); background: var(--panel-2); }
+.player-list li.current::before { content: "▶ "; color: var(--accent); }
+.player-list .pl-name { overflow-wrap: anywhere; }
+.player-list .pl-score { font-variant-numeric: tabular-nums; }
+
+.lesson-banner {
+  position: absolute; top: calc(0.7rem + var(--sat)); left: 50%; transform: translateX(-50%);
+  max-width: min(92%, 34rem); background: var(--accent); color: #1c1208;
+  padding: 0.5rem 1rem; border-radius: 0.6rem; font-weight: 600; z-index: 4;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4); text-align: center;
+}
+.countdown {
+  position: absolute; inset: 0; display: grid; place-items: center; z-index: 4;
+  font-size: clamp(3rem, 12vw, 6rem); font-weight: 800; color: var(--accent);
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.7); pointer-events: none;
+}
+
+/* --- overlays ----------------------------------------------------------------------- */
+.overlay-backdrop {
+  position: fixed; inset: 0; background: rgba(8, 5, 3, 0.72); z-index: 50;
+  display: flex; align-items: center; justify-content: center; padding: 1rem;
+}
+.overlay {
+  background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: 0.9rem; padding: 1.1rem 1.3rem; width: min(94vw, 40rem);
+  max-height: 88dvh; overflow-y: auto; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+}
+.overlay h2 { color: var(--accent); margin-bottom: 0.6rem; font-size: 1.25rem; }
+.overlay h3 { color: var(--accent); margin: 0.8rem 0 0.35rem; font-size: 1rem; }
+.overlay p { max-width: 70ch; margin-bottom: 0.5rem; }
+.overlay .overlay-close { float: right; }
+.overlay .muted { opacity: 0.75; font-size: 0.9em; }
+
+.menu-list { list-style: none; display: flex; flex-direction: column; gap: 0.55rem; margin-top: 0.4rem; }
+.menu-list .btn { width: 100%; text-align: left; display: flex; justify-content: space-between; gap: 0.6rem; align-items: baseline; }
+.menu-list .btn .sub { font-weight: 400; font-size: 0.85em; opacity: 0.8; }
+
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.6rem; margin-top: 0.5rem; }
+.stage-card {
+  border: 1px solid var(--line); border-radius: 0.6rem; padding: 0.55rem 0.7rem;
+  background: var(--panel-2); cursor: pointer; text-align: left; min-height: 44px;
+}
+.stage-card:hover:not(:disabled) { filter: brightness(1.15); }
+.stage-card:disabled { opacity: 0.45; cursor: default; }
+.stage-card .stars { color: var(--accent); letter-spacing: 0.1em; }
+.stage-card.mastery { border-color: var(--accent); }
+
+.settings-grid { display: grid; gap: 0.55rem; margin-top: 0.4rem; }
+.settings-grid label { display: flex; justify-content: space-between; align-items: center; gap: 0.8rem; min-height: 44px; }
+.settings-grid input[type="range"] { flex: 1; max-width: 12rem; accent-color: var(--accent); }
+.settings-grid select, .settings-grid input[type="text"] {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 0.4rem; padding: 0.35rem 0.5rem; font: inherit; min-height: 44px;
+}
+
+.results-table { width: 100%; border-collapse: collapse; margin: 0.5rem 0; }
+.results-table th, .results-table td { padding: 0.3rem 0.45rem; text-align: left; border-bottom: 1px solid var(--line); }
+.results-table td.num, .results-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.results-table tr.me td { color: var(--accent); font-weight: 700; }
+
+.ach-list { list-style: none; display: flex; flex-direction: column; gap: 0.4rem; }
+.ach-list li { padding: 0.4rem 0.6rem; border: 1px solid var(--line); border-radius: 0.5rem; }
+.ach-list li.locked { opacity: 0.5; }
+.ach-list .ach-name { font-weight: 700; }
+
+.toast {
+  position: fixed; left: 50%; bottom: calc(7rem + var(--sab)); transform: translateX(-50%);
+  background: var(--panel); border: 1px solid var(--line); color: var(--text);
+  padding: 0.5rem 1rem; border-radius: 0.6rem; z-index: 80; display: none; max-width: 90vw;
+}
+.toast.show { display: block; }
+
+.drawer-toggle {
+  display: none; position: absolute; top: 0.6rem; z-index: 6;
+  min-height: 44px; padding: 0 0.8rem; border-radius: 0.5rem;
+  background: var(--panel); color: var(--text); border: 1px solid var(--line);
+}
+.drawer-toggle.left { left: calc(0.6rem + var(--sal)); }
+.drawer-toggle.right { right: calc(0.6rem + var(--sar)); }
+
+/* --- responsive --------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  #layout { grid-template-columns: 1fr; }
+  .rail {
+    position: absolute; top: 0; bottom: 0; width: min(85vw, 320px); z-index: 7;
+    transition: transform 0.22s ease; box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+  }
+  #rail-left { left: 0; transform: translateX(-105%); }
+  #rail-right { right: 0; left: auto; transform: translateX(105%); }
+  body.drawer-left-open #rail-left { transform: none; }
+  body.drawer-right-open #rail-right { transform: none; }
+  .drawer-toggle { display: block; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rail { transition: none; }
+}
+body.reduced-motion .rail { transition: none; }
+
+/* Portrait mobile: status bar on top, playfield center, thumb tray at bottom. */
+@media (max-width: 1023px) and (orientation: portrait) {
+  .dice-tray { bottom: calc(5.4rem + var(--sab)); }
+  .action-tray { bottom: calc(0.9rem + var(--sab)); }
+  .action-tray .btn { min-height: 52px; font-size: 1.05em; }
+}
+/* Landscape mobile: narrow status rail preserved; big targets kept. */
+@media (max-width: 1023px) and (orientation: landscape) {
+  .dice-tray { right: calc(0.6rem + var(--sar)); left: auto; transform: none; flex-direction: column; bottom: auto; top: 50%; translate: 0 -50%; }
+  .action-tray { bottom: calc(0.5rem + var(--sab)); }
+}
+
+body.left-handed .drawer-toggle.left { left: auto; right: calc(0.6rem + var(--sar)); }
+body.left-handed .drawer-toggle.right { right: auto; left: calc(0.6rem + var(--sal)); }

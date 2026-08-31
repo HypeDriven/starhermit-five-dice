@@ -1,0 +1,10 @@
+{
+  "name": "five-dice",
+  "version": "1.0.0",
+  "description": "Five Dice — a cozy mountain-lodge dice table (StarHermit game 89)",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/run.js"
+  }
+}

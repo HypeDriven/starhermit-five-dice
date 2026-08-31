@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<title>Five Dice</title>
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+<a class="skip-link" href="#action-tray">Skip to actions</a>
+<div id="app">
+  <header id="topbar">
+    <h1 class="game-title">Five Dice</h1>
+    <p id="session-status" class="session-status" aria-live="off"></p>
+    <nav class="topbar-actions" aria-label="Game">
+      <button type="button" id="btn-pause" class="icon-btn" aria-label="Pause" hidden>&#10073;&#10073;</button>
+      <button type="button" id="btn-help-top" class="icon-btn" aria-label="Help">?</button>
+      <button type="button" id="btn-settings-top" class="icon-btn" aria-label="Settings">&#9881;</button>
+    </nav>
+  </header>
+
+  <main id="layout">
+    <aside id="rail-left" class="rail" aria-label="Scorecard"></aside>
+
+    <section id="stage" aria-label="Dice table">
+      <canvas id="dice-stage" aria-hidden="true"></canvas>
+      <p id="compat-message" class="compat-message" hidden></p>
+      <div id="lesson-banner" class="lesson-banner" role="status" hidden></div>
+      <div id="countdown" class="countdown" role="status" hidden></div>
+      <div id="dice-tray" class="dice-tray" role="group" aria-label="Dice — hold or release" hidden></div>
+      <div id="action-tray" class="action-tray" role="toolbar" aria-label="Turn actions" hidden></div>
+    </section>
+
+    <aside id="rail-right" class="rail" aria-label="Table status"></aside>
+
+    <button type="button" id="drawer-left-toggle" class="drawer-toggle left" aria-controls="rail-left" aria-expanded="false">Card</button>
+    <button type="button" id="drawer-right-toggle" class="drawer-toggle right" aria-controls="rail-right" aria-expanded="false">Table</button>
+  </main>
+</div>
+
+<div id="overlay-root"></div>
+<div id="toast" class="toast" role="status"></div>
+<div id="live" class="visually-hidden" aria-live="polite"></div>
+<div id="live-assertive" class="visually-hidden" aria-live="assertive"></div>
+
+<script type="module" src="/js/main.js"></script>
+</body>
+</html>
