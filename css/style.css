@@ -222,7 +222,8 @@ body.high-contrast .die-btn.held { outline: 3px dashed var(--select); outline-of
 
 /* --- responsive --------------------------------------------------------------------- */
 @media (max-width: 1023px) {
-  #layout { grid-template-columns: 1fr; }
+  /* Rails park off-canvas via translateX; clip keeps them from widening the document. */
+  #layout { grid-template-columns: 1fr; overflow-x: clip; }
   .rail {
     position: absolute; top: 0; bottom: 0; width: min(85vw, 320px); z-index: 7;
     transition: transform 0.22s ease; box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
