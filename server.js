@@ -79,6 +79,27 @@ function readBody(req) {
 // Reject impossible or stale-version scores; the replay must reproduce the
 // claimed terminal hash and breakdown exactly.
 
+// The replay init must match the published content definition exactly on
+// every rules-relevant field — otherwise a forged envelope (extra rolls,
+// fewer opponents, softer goal) would replay cleanly with inflated scores.
+function initMatchesDef(init, def) {
+  const norm = {
+    rolls: (v) => v ?? rules.DEFAULT_ROLLS,
+    disabled: (v) => (Array.isArray(v) ? [...v].sort().join(',') : ''),
+    goal: (g) => (g?.type === 'score' ? `score:${Math.floor(g.target)}` : 'win'),
+    limit: (l) => l?.totalMs ?? null,
+  };
+  if (!Array.isArray(init.players) || !Array.isArray(def.players)) return false;
+  if (init.players.length !== def.players.length) return false;
+  for (let i = 0; i < def.players.length; i++) {
+    if (!!init.players[i]?.isAI !== !!def.players[i]?.isAI) return false;
+  }
+  return norm.rolls(init.rollsPerTurn) === norm.rolls(def.rollsPerTurn) &&
+    norm.disabled(init.disabledCategories) === norm.disabled(def.disabledCategories) &&
+    norm.goal(init.goal) === norm.goal(def.goal) &&
+    norm.limit(init.limits) === norm.limit(def.limits);
+}
+
 function validateSubmission(body) {
   const { result, envelope } = body || {};
   if (!result || !envelope) return { error: 'missing-fields' };
@@ -94,6 +115,7 @@ function validateSubmission(body) {
       ? dailyForDate(new Date(`${result.seed.slice(6)}T00:00:00Z`)) : null);
   if (!known) return { error: 'unknown-content' };
   if (known.seed !== envelope.init.seed) return { error: 'seed-mismatch' };
+  if (!initMatchesDef(envelope.init, known)) return { error: 'init-mismatch' };
   let rep;
   try { rep = rules.replay(envelope); }
   catch { return { error: 'replay-crashed' }; }
@@ -210,8 +232,10 @@ const server = http.createServer(async (req, res) => {
 
     // Static distribution.
     const rel = p === '/' ? 'index.html' : p.replace(/^\//, '');
-    const filePath = path.join(ROOT, rel);
-    if (!filePath.startsWith(ROOT) || filePath.includes(`${path.sep}data${path.sep}`)) {
+    const filePath = path.resolve(ROOT, rel);
+    const insideRoot = filePath.startsWith(ROOT + path.sep);
+    const inData = filePath.startsWith(path.join(DATA_DIR) + path.sep);
+    if (!insideRoot || inData) {
       res.writeHead(403); res.end('Forbidden'); return;
     }
     fs.readFile(filePath, (err, data) => {

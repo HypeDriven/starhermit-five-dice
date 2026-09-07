@@ -16,6 +16,10 @@ body.high-contrast { --line: rgba(255,255,255,0.45); }
 body.large-text { --font-size: 1.18rem; }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
+/* The hidden attribute must always win over display rules below (countdown,
+   trays, compat panel set display:flex/grid, which would otherwise keep
+   "hidden" elements on screen and intercepting pointer input). */
+[hidden] { display: none !important; }
 html, body { height: 100%; }
 body {
   background: var(--wall); color: var(--text);
@@ -213,7 +217,7 @@ body.high-contrast .die-btn.held { outline: 3px dashed var(--select); outline-of
 .toast.show { display: block; }
 
 .drawer-toggle {
-  display: none; position: absolute; top: 0.6rem; z-index: 6;
+  display: none; position: absolute; top: 0.6rem; z-index: 8; /* above open rails (z-index 7) so the drawer always stays tappable */
   min-height: 44px; padding: 0 0.8rem; border-radius: 0.5rem;
   background: var(--panel); color: var(--text); border: 1px solid var(--line);
 }
@@ -241,9 +245,16 @@ body.reduced-motion .rail { transition: none; }
 
 /* Portrait mobile: status bar on top, playfield center, thumb tray at bottom. */
 @media (max-width: 1023px) and (orientation: portrait) {
-  .dice-tray { bottom: calc(5.4rem + var(--sab)); }
-  .action-tray { bottom: calc(0.9rem + var(--sab)); }
-  .action-tray .btn { min-height: 52px; font-size: 1.05em; }
+  .dice-tray { bottom: calc(8.2rem + var(--sab)); } /* clears a 2-row wrapped action tray */
+  .action-tray {
+    bottom: calc(0.9rem + var(--sab));
+    max-width: calc(100vw - 1rem - var(--sal) - var(--sar));
+    flex-wrap: wrap; justify-content: center;
+  }
+  .action-tray .btn { min-height: 52px; font-size: 1.05em; padding: 0.4rem 0.7rem; }
+  /* Pause and Leave stay reachable via the top bar and pause menu; keeping
+     them out of the thumb tray leaves it one row clear of the dice. */
+  .action-tray .tray-secondary { display: none; }
 }
 /* Landscape mobile: narrow status rail preserved; big targets kept. */
 @media (max-width: 1023px) and (orientation: landscape) {

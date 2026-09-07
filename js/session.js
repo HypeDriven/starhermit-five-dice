@@ -33,6 +33,7 @@ export class Session {
     this.startStamp = 0;        // perf clock when round went active
     this.pauseAccum = null;     // session-clock base (ms); set on first start
     this.pauseStart = 0;
+    this.pausedFrom = null;     // machine state to return to on resume
     this.tutorialStep = 0;
     this.stats = { avalanches: 0, upperBonuses: 0, holdsUsed: 0 };
     this.onTransition = null;
@@ -77,7 +78,8 @@ export class Session {
   }
 
   pause(reason = 'user') {
-    if (this.machine !== 'active') return;
+    if (this.machine !== 'active' && this.machine !== 'tutorial') return;
+    this.pausedFrom = this.machine;
     this.pauseAccum = this.nowMs();
     this.pauseStart = performance.now();
     this.transition('paused', reason);
@@ -87,12 +89,14 @@ export class Session {
   resume() {
     if (this.machine !== 'paused' && this.machine !== 'reconnecting') return;
     this.startStamp = performance.now();
-    this.transition('active', `resume:${this.machineReason}`);
+    const back = this.pausedFrom === 'tutorial' ? 'tutorial' : 'active';
+    this.pausedFrom = null;
+    this.transition(back, `resume:${this.machineReason}`);
   }
 
   // Backgrounding pauses solo simulation.
   background() {
-    if (this.machine === 'active') this.pause('background');
+    if (this.machine === 'active' || this.machine === 'tutorial') this.pause('background');
   }
 
   // --- commands ------------------------------------------------------------
@@ -186,6 +190,7 @@ export class Session {
 
   hint() {
     if (!this.def?.assists?.hints) return { error: 'hints-disabled' };
+    if (!this.isHumanTurn()) return { error: 'not-your-turn' };
     const h = getHint(this.state);
     if (h) this.emit({ type: 'hint', ...h });
     return h;
@@ -207,29 +212,35 @@ export class Session {
   }
 
   // --- undo ------------------------------------------------------------------
-  // Undo restores the start of the last human turn; AI commands since then
-  // are truncated from the replay log (they will be re-decided).
+  // Undo restores the start of the current human turn. The stack top is the
+  // current turn's restore point (pushed on every human turn-start); AI
+  // commands since then are truncated from the replay log (already re-decided
+  // by then — the snapshot sits after the last completed AI turn).
   undoAllowed() {
-    return !!this.def?.assists?.undo && this.undoStack.length > 1 &&
+    const top = this.undoStack[this.undoStack.length - 1];
+    return !!this.def?.assists?.undo && !!top &&
       this.state?.status === 'active' &&
-      (this.machine === 'active' || this.machine === 'tutorial');
+      (this.machine === 'active' || this.machine === 'tutorial') &&
+      this.commands.length > top.commands;
   }
 
   snapshotTurnStart() {
     if (!this.def?.assists?.undo) return;
     const me = currentPlayer(this.state);
     if (me?.isAI) return; // only human turn-starts are restore points
-    this.undoStack.push({ state: serialize(this.state), commands: this.commands.length });
+    this.undoStack.push({ state: serialize(this.state), commands: this.commands.length, stats: { ...this.stats } });
     if (this.undoStack.length > 60) this.undoStack.shift();
   }
 
   undo() {
     if (!this.undoAllowed()) return { error: 'undo-unavailable' };
-    // Pop the current turn-start; restore the previous one.
-    this.undoStack.pop();
     const snap = this.undoStack[this.undoStack.length - 1];
     this.state = deserialize(snap.state);
+    this.stats = { ...snap.stats };
     this.commands.length = snap.commands;
+    // Drop checkpoints that belong to the truncated commands.
+    const lastId = this.commands.length ? this.commands[this.commands.length - 1].id : 0;
+    this.checkpoints = this.checkpoints.filter((c) => c.after <= lastId);
     this.emit({ type: 'undo', state: this.state });
     return { ok: true };
   }
@@ -289,6 +300,7 @@ export class Session {
     const snap = {
       v: 1, def: this.def, state: serialize(this.state),
       commands: this.commands.filter((c) => c.id > 0),
+      stats: { ...this.stats },
       savedAt: Date.now(), sessionId: this.sessionId,
     };
     this.platform.saveLocal(AUTOSAVE_KEY, snap);
@@ -304,6 +316,8 @@ export class Session {
       this.commands = snap.commands || [];
       this.sessionId = snap.sessionId || this.sessionId;
       this.undoStack = [];
+      this.checkpoints = [{ after: 0, hash: hashState(createGame(this.def)) }];
+      this.stats = { avalanches: 0, upperBonuses: 0, holdsUsed: 0, ...(snap.stats || {}) };
       const awayMs = Date.now() - (snap.savedAt || Date.now());
       this.transition('paused', 'reconnect');
       this.emit({ type: 'round', def: this.def, state: this.state });

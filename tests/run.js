@@ -510,6 +510,204 @@ test('helpers: faceCounts, longestRun', () => {
   eq(longestRun([6, 6, 6, 6, 6]), 1);
 });
 
+// --- session controller (state machine, undo, persistence) ----------------------
+
+import { Session } from '../js/session.js';
+
+function stubPlatform() {
+  const mem = new Map();
+  return {
+    saveLocal: (k, v) => { if (v == null) mem.delete(k); else mem.set(k, v); },
+    loadLocal: (k) => (mem.has(k) ? mem.get(k) : null),
+    recordResult: () => {},
+    serverOffsetMs: () => 0,
+  };
+}
+
+test('session: pause/resume round-trips through tutorial state', () => {
+  const s = new Session(stubPlatform(), () => {});
+  s.startRound(LESSONS[0]);
+  eq(s.machine, 'tutorial');
+  s.pause('user');
+  eq(s.machine, 'paused');
+  s.resume();
+  eq(s.machine, 'tutorial', 'resume returns to tutorial, not active');
+  ok(s.isHumanTurn());
+});
+
+test('session: undo restores the start of the current turn', () => {
+  const s = new Session(stubPlatform(), () => {});
+  s.startRound(practiceDef({ difficulty: 'hearth', seed: 'undo-test' }));
+  s.beginActive();
+  eq(s.undoAllowed(), false, 'nothing to undo before acting');
+  s.roll();
+  s.toggleHold(0);
+  eq(s.stats.holdsUsed, 1, 'hold counted before undo');
+  ok(s.undoAllowed());
+  const r = s.undo();
+  ok(r.ok);
+  eq(s.state.hasRolled, false, 'turn start restored');
+  eq(s.stats.holdsUsed, 0, 'undone hold removed from statistics');
+  eq(s.state.rollsLeft, s.state.rollsPerTurn);
+  ok(s.state.dice.every((d) => d === 0), 'dice back to unrolled');
+  eq(hashState(s.state), s.checkpoints[0].hash, 'restored to the initial state');
+  eq(s.undoAllowed(), false, 'second undo is a no-op');
+});
+
+test('session: hint is gated to the human turn', () => {
+  const s = new Session(stubPlatform(), () => {});
+  s.startRound(practiceDef({ difficulty: 'hearth', seed: 'hint-test' }));
+  s.beginActive();
+  ok(s.hint()?.action, 'hint works on the human turn');
+  // Hand the turn to the AI seat: hints must refuse.
+  s.state = { ...s.state, current: 1 };
+  eq(s.hint().error, 'not-your-turn');
+});
+
+test('session: autosave snapshot round-trips incl. stats', () => {
+  const platform = stubPlatform();
+  const s = new Session(platform, () => {});
+  s.startRound(practiceDef({ difficulty: 'hearth', seed: 'snap-test' }));
+  s.beginActive();
+  s.roll();
+  s.toggleHold(2);
+  s.stats.avalanches = 1; // simulate earlier-round carryover protection
+  s.saveSnapshot();
+  const s2 = new Session(platform, () => {});
+  ok(s2.restoreSnapshot(), 'snapshot restored');
+  eq(s2.machine, 'paused');
+  eq(hashState(s2.state), hashState(s.state), 'restored state hash matches');
+  eq(s2.stats.avalanches, 1, 'stats restored with the snapshot');
+  eq(s2.checkpoints.length, 1, 'checkpoints reset to a fresh init hash');
+});
+
+// --- server: authoritative submission validation (integration) --------------------
+
+import { spawn } from 'node:child_process';
+
+async function testAsync(name, fn) {
+  try {
+    await fn();
+    passed++;
+    console.log(`ok   ${name}`);
+  } catch (err) {
+    failed++;
+    failures.push({ name, err });
+    console.error(`FAIL ${name}: ${err.message}`);
+  }
+}
+
+// Play one full deterministic challenge table and build the envelope the
+// session would submit.
+function buildEnvelope(def, sessionId) {
+  let state = createGame(structuredClone(def));
+  const commands = [];
+  let guard = 0;
+  while (state.status === 'active' && guard++ < 500) {
+    const step = aiStep(state, state.players[state.current].difficulty || 'hearth');
+    for (const c of step) {
+      const command = { id: state.nextCmdId, at: state.clock, ...c };
+      const r = applyCommand(state, command);
+      if (r.error) throw new Error(`script error ${r.error}`);
+      commands.push(command);
+      state = r.state;
+      if (state.status !== 'active') break;
+    }
+  }
+  const init = {
+    seed: def.seed, players: def.players, mode: def.mode, contentId: def.id,
+    rollsPerTurn: def.rollsPerTurn, disabledCategories: def.disabledCategories,
+    goal: def.goal, limits: def.limits, par: def.par,
+    ranked: def.ranked, mechanics: def.mechanics,
+  };
+  return {
+    state,
+    body: {
+      name: 'Tester',
+      result: {
+        contentId: def.id, mode: def.mode, seed: def.seed,
+        status: playerWon(state, 0) ? 'won' : 'lost', reason: state.terminalReason,
+        score: totalsBreakdown(state.players[0].scores),
+        invalid: state.players[0].invalid, elapsedMs: state.clock,
+        sessionId, assists: def.assists, rulesV: def.rulesV, contentV: def.v,
+      },
+      envelope: {
+        schema: 1, build: RULES_VERSION, contentV: CONTENT_VERSION,
+        contentId: def.id, seed: def.seed, init,
+        commands,
+        checkpoints: [
+          { after: 0, hash: hashState(createGame(structuredClone(def))) },
+          { after: commands[commands.length - 1].id, hash: hashState(state) },
+        ],
+      },
+    },
+  };
+}
+
+async function post(port, path, body) {
+  const res = await fetch(`http://127.0.0.1:${port}${path}`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return { status: res.status, body: await res.json().catch(() => ({})) };
+}
+
+await testAsync('server: valid envelope accepted, forged/tampered rejected', async () => {
+  const port = 18000 + Math.floor(Math.random() * 2000);
+  const child = spawn(process.execPath, ['server.js'], {
+    env: { ...process.env, PORT: String(port) },
+    stdio: 'ignore',
+  });
+  try {
+    // Wait for the listener.
+    let up = false;
+    for (let i = 0; i < 50 && !up; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      up = await fetch(`http://127.0.0.1:${port}/api/v1/time`).then((r) => r.ok).catch(() => false);
+    }
+    ok(up, 'server did not start');
+
+    const def = CHALLENGES.find((c) => c.id === 'two-roll-table');
+    const { body } = buildEnvelope(def, 'sess-valid-1');
+
+    const good = await post(port, '/api/v1/leaderboard/submit', body);
+    eq(good.status, 200, `valid submit: ${JSON.stringify(good.body)}`);
+    eq(good.body.accepted, true);
+
+    // Idempotent retry by session id.
+    const again = await post(port, '/api/v1/leaderboard/submit', body);
+    eq(again.status, 200);
+    const board = await fetch(`http://127.0.0.1:${port}/api/v1/leaderboard?board=challenge:${def.id}`)
+      .then((r) => r.json());
+    eq(board.entries.length, 1, 'retry must not duplicate the entry');
+
+    // Forged init: replaying the same seed with 5 rolls per turn replays
+    // cleanly and scores well — the server must reject it as init-mismatch.
+    const cheatDef = { ...structuredClone(def), rollsPerTurn: 5 };
+    const cheat = buildEnvelope(cheatDef, 'sess-forged');
+    cheat.body.result.contentId = def.id;
+    cheat.body.envelope.contentId = def.id;
+    cheat.body.envelope.init.contentId = def.id;
+    const badInit = await post(port, '/api/v1/leaderboard/submit', cheat.body);
+    eq(badInit.status, 422);
+    eq(badInit.body.error, 'init-mismatch', 'forged init rejected');
+
+    // Impossible score rejected.
+    const inflated = structuredClone(body);
+    inflated.result.score.grand = 9999;
+    inflated.result.sessionId = 'sess-inflated';
+    const badScore = await post(port, '/api/v1/leaderboard/submit', inflated);
+    eq(badScore.status, 422);
+    eq(badScore.body.error, 'impossible-score');
+
+    // Traversal attempts never serve files outside the distribution.
+    const trav = await fetch(`http://127.0.0.1:${port}/%2e%2e/%2e%2e/etc/hostname`);
+    ok([403, 404].includes(trav.status), `traversal status ${trav.status}`);
+  } finally {
+    child.kill();
+  }
+});
+
 // --- summary ----------------------------------------------------------------------------
 
 console.log(`\n${passed} passed, ${failed} failed`);

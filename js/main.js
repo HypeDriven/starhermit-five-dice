@@ -101,8 +101,7 @@ async function boot() {
   function guard(fn) {
     audio.ensure(); // one-input acknowledgment includes waking audio
     const r = fn();
-    if (r?.error && !['not-your-turn'].includes(r.error)) audio.uiClick();
-    else audio.uiClick();
+    audio.uiClick();
     return r;
   }
 
@@ -142,6 +141,10 @@ async function boot() {
         }, platform.settings.reducedMotion ? 200 : 1400);
       }
       if (e.to === 'active' && e.reason.startsWith('resume')) scheduleAI();
+      if (e.to === 'tutorial' && e.reason.startsWith('resume')) scheduleAI();
+      // Countdown may have completed while the tab was hidden: honor the
+      // background-pauses-solo rule as soon as the round goes active.
+      if (e.to === 'active' && document.hidden) session.pause('background');
     } else if (e.type === 'round-end') {
       stopClockTicker();
     } else if (e.type === 'undo') {

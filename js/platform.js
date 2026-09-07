@@ -20,11 +20,13 @@ export class Platform {
 
   async init() {
     this.readLaunchToken();
-    this.settings = this.loadLocal('settings') || defaultSettings();
+    // Merge over defaults so saves from older versions gain new keys.
+    this.settings = { ...defaultSettings(), ...(this.loadLocal('settings') || {}) };
+    this.consent.telemetry = !!this.settings.telemetryConsent;
     this.profile = this.loadLocal('profile') || {
       name: 'Guest', guest: true, createdAt: Date.now(),
     };
-    this.progress = this.loadLocal('progress') || freshProgress();
+    this.progress = { ...freshProgress(), ...(this.loadLocal('progress') || {}) };
     this.results = this.loadLocal('results') || [];
     await this.detectHost();
     return this;
@@ -349,7 +351,7 @@ export const ACHIEVEMENTS = [
   { key: 'first_table',      name: 'First Table',      desc: 'Win your first table.' },
   { key: 'lodge_keeper',     name: 'Lodge Keeper',     desc: 'Earn the 35-point upper bonus.' },
   { key: 'avalanche_caller', name: 'Avalanche Caller', desc: 'Score an Avalanche (five of a kind).' },
-  { key: 'weekly_regular',   name: 'Weekly Regular',   desc: 'Play on seven different days.' },
+  { key: 'weekly_regular',   name: 'Weekly Regular',   desc: 'Win tables on seven different days.' },
   { key: 'mastery_stage',    name: 'Mastery Stage',    desc: 'Win a journey mastery stage.' },
   { key: 'century_nights',   name: 'Century Nights',   desc: 'Finish 100 tables — at your own pace.' },
 ];

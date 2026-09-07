@@ -372,7 +372,12 @@ export class UI {
       c.append(this.h('h3', { text: 'Privacy' }));
       const consent = this.h('input', {
         type: 'checkbox', ...(this.platform.consent.telemetry ? { checked: true } : {}),
-        onchange: (e) => { this.platform.consent.telemetry = e.target.checked; this.toast(e.target.checked ? 'Anonymous funnel telemetry on' : 'Telemetry off'); },
+        onchange: (e) => {
+          this.platform.consent.telemetry = e.target.checked;
+          s.telemetryConsent = e.target.checked;
+          save();
+          this.toast(e.target.checked ? 'Anonymous funnel telemetry on' : 'Telemetry off');
+        },
       });
       grid.append(this.h('label', {}, 'Anonymous usage telemetry', consent));
 
@@ -589,11 +594,11 @@ export class UI {
       onclick: () => this.env.tryUndo(),
     }));
     container.append(this.h('button', {
-      type: 'button', class: 'btn', text: 'Pause',
+      type: 'button', class: 'btn tray-secondary', text: 'Pause',
       onclick: () => this.togglePause(),
     }));
     container.append(this.h('button', {
-      type: 'button', class: 'btn danger', text: 'Leave table',
+      type: 'button', class: 'btn danger tray-secondary', text: 'Leave table',
       onclick: () => this.confirm('Leave this table? The round will be recorded as a forfeit.', () => this.env.giveUp()),
     }));
   }
@@ -651,10 +656,10 @@ export class UI {
 
   showResults(record, outcome) {
     this.setHudVisible(false);
+    const won = record.status === 'won';
+    const b = record.score;
     this.openOverlay('Results', (c) => {
-      const won = record.status === 'won';
       c.append(this.h('h2', { text: won ? '🏔 You take the table!' : record.reason === 'gave-up' ? 'Table forfeited' : record.reason === 'time-limit' ? '⏱ The blizzard wins' : 'The lodge keeps its crown' }));
-      const b = record.score;
       c.append(this.h('p', { text: `Your card: upper ${b.upper} + bonus ${b.bonus} + lower ${b.lower} = ${b.grand} points · ${record.invalid} invalid action${record.invalid === 1 ? '' : 's'} · ${(record.durationMs / 1000).toFixed(0)}s` }));
       if (this.session.def?.par?.score) {
         c.append(this.h('p', { class: 'muted', text: `Par for this table: ${this.session.def.par.score}` }));
@@ -691,11 +696,12 @@ export class UI {
       const def = this.session.def;
       const add = (label, fn, primary = false) => list.append(this.h('li', {},
         this.h('button', { type: 'button', class: `btn${primary ? ' primary' : ''}`, text: label, onclick: () => { this.closeOverlay(); fn(); } })));
+      let recommended = false;
       if (def.mode === 'journey' && won) {
         const next = JOURNEY.find((j) => j.stage === def.stage + 1);
-        if (next) add(`Next: ${next.name}`, () => this.env.startContent(next), true);
+        if (next) { add(`Next: ${next.name}`, () => this.env.startContent(next), true); recommended = true; }
       }
-      add('Play again', () => this.env.startContent(def.mode === 'practice' ? practiceDef({ difficulty: def.id.split('-')[1] || 'hearth' }) : def), !JOURNEY.length);
+      add('Play again', () => this.env.startContent(def.mode === 'practice' ? practiceDef({ difficulty: def.id.split('-')[1] || 'hearth' }) : def), !recommended);
       add('Back to title', () => this.showTitle());
       c.append(list);
     }, { dismissible: false });
@@ -786,7 +792,8 @@ export class UI {
       const code = ev.code;
       if (code === b.pause) {
         ev.preventDefault();
-        if (this.overlay && this.overlayKind !== 'Results') this.closeOverlay();
+        if (this.overlay && this.overlayKind === 'Paused') this.togglePause(); // close + resume
+        else if (this.overlay && this.overlayKind !== 'Results') this.closeOverlay();
         else if (this.hudVisible) this.togglePause();
         return;
       }
