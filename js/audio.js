@@ -6,7 +6,7 @@
 // adaptive generative music stem. Buses: music / effects / ambience / voice,
 // each with an independent slider. Seeded variants keep replays consistent.
 
-import { createStream } from './rules.js';
+import { createStream, getCategory, UPPER_BONUS_THRESHOLD } from './rules.js';
 
 export class AudioEngine {
   constructor(settings, emitCaption = () => {}) {
@@ -21,6 +21,7 @@ export class AudioEngine {
     this.started = false;
     this.sfxNames = null;      // Set of clip basenames from sfx/manifest.json
     this.sfxCache = new Map(); // name -> AudioBuffer | Promise (loading) | null (failed)
+    this.ambienceSample = null; // looping authored hearth loop once decoded
   }
 
   // Must be called from a user gesture.
@@ -57,9 +58,35 @@ export class AudioEngine {
       if (!res.ok) throw new Error(`sfx manifest ${res.status}`);
       const list = await res.json();
       this.sfxNames = new Set(list.map((c) => c.name));
+      this.startSampledAmbience();
     } catch {
       this.sfxNames = new Set();
     }
+  }
+
+  // Authored hearth loop (sfx/ambience-hearth.opus) replaces the synthesized
+  // room noise + crackle once decoded; the synth keeps running until then and
+  // stays as the permanent fallback if the clip is missing or fails to decode.
+  async startSampledAmbience() {
+    if (!this.ctx || this.ambienceSample || !this.sfxNames?.has('ambience-hearth')) return;
+    try {
+      const res = await fetch('sfx/ambience-hearth.opus');
+      if (!res.ok) throw new Error(`ambience ${res.status}`);
+      const buf = await this.ctx.decodeAudioData(await res.arrayBuffer());
+      if (!this.ctx || this.ambienceSample) return;
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      const g = this.ctx.createGain();
+      g.gain.value = 1.6; // loop is normalized to -20 LUFS; lift toward the synth level
+      src.connect(g).connect(this.buses.ambience);
+      src.start();
+      this.ambienceSample = src;
+      this.ambienceSrc?.stop();
+      this.ambienceSrc = null;
+      clearInterval(this.crackleTimer);
+      this.crackleTimer = null;
+    } catch { /* synth ambience remains */ }
   }
 
   // Play a cached sample through the effects bus (current mute/volume apply via
@@ -175,7 +202,12 @@ export class AudioEngine {
         this.caption(e.held ? 'Die held' : 'Die released');
         break;
       case 'score': {
+        const cat = getCategory(e.category);
+        // Fixed-point lower hands (Full Lodge, Ridge Path, Summit Trail) get
+        // their own "hand made" cue; Avalanche keeps its cascade.
+        const madeHand = e.points > 0 && cat && cat.points != null && cat.id !== 'avalanche';
         const key = e.category === 'avalanche' && e.points > 0 ? 'score-avalanche'
+          : madeHand ? 'score-hand'
           : e.points > 0 ? 'score-points' : 'score-zero';
         if (!this.playSfx(key)) {
           const base = 392 * Math.pow(1.0595, Math.min(10, Math.floor(e.points / 5)));
@@ -187,6 +219,15 @@ export class AudioEngine {
           }
         }
         this.caption(`${e.points} points scored`);
+        // Upper bonus crossed on this very score: layer the lodge-bonus cue.
+        const b = e.breakdown;
+        if (b && b.bonus > 0 && cat?.section === 'upper' && b.upper - e.points < UPPER_BONUS_THRESHOLD) {
+          if (!this.playSfx('score-bonus')) {
+            [523, 659, 784].forEach((f, i) =>
+              this.blip('effects', { freq: f, dur: 0.25, type: 'sine', gain: 0.16, delay: 0.25 + i * 0.09 }));
+          }
+          this.caption('Lodge bonus earned');
+        }
         break;
       }
       case 'turn':
@@ -231,10 +272,57 @@ export class AudioEngine {
   }
 
   uiClick() {
+    this.ensure(); // always invoked from a click/tap: safe to unlock here
     if (!this.ctx) return;
     if (!this.playSfx('ui-click')) {
       this.blip('effects', { freq: 660, dur: 0.04, type: 'sine', gain: 0.08 });
     }
+  }
+
+  // --- presentation cues (not rules events) -----------------------------------------
+
+  // Pre-round countdown: one tick per number, a brighter "go" when the table opens.
+  countdownTick(final = false) {
+    if (!this.ctx) return;
+    if (final) {
+      if (!this.playSfx('countdown-go')) {
+        this.blip('effects', { freq: 660, dur: 0.12, type: 'triangle', gain: 0.14 });
+        this.blip('effects', { freq: 990, dur: 0.16, type: 'triangle', gain: 0.12, delay: 0.09 });
+      }
+      this.caption('Go');
+      return;
+    }
+    if (!this.playSfx('countdown-tick')) {
+      this.blip('effects', { freq: 440, dur: 0.08, type: 'triangle', gain: 0.12 });
+    }
+  }
+
+  // Results verdict, played when the results overlay opens (after the finish cue).
+  result(won) {
+    if (!this.ctx) return;
+    if (!this.playSfx(won ? 'result-win' : 'result-lose')) {
+      const seq = won ? [523, 659, 784, 1047, 1319] : [440, 392, 330];
+      seq.forEach((f, i) => this.blip('effects', { freq: f, dur: 0.28, type: 'sine', gain: 0.16, delay: i * 0.12 }));
+    }
+    this.caption(won ? 'You take the table' : 'The lodge keeps its crown');
+  }
+
+  achievement() {
+    if (!this.ctx) return;
+    if (!this.playSfx('achievement-unlock')) {
+      [880, 1109, 1319, 1760].forEach((f, i) =>
+        this.blip('effects', { freq: f, dur: 0.22, type: 'sine', gain: 0.12, delay: i * 0.07 }));
+    }
+    this.caption('Achievement unlocked');
+  }
+
+  lessonComplete() {
+    if (!this.ctx) return;
+    if (!this.playSfx('lesson-complete')) {
+      this.blip('effects', { freq: 784, dur: 0.12, type: 'sine', gain: 0.12 });
+      this.blip('effects', { freq: 1047, dur: 0.18, type: 'sine', gain: 0.12, delay: 0.1 });
+    }
+    this.caption('Lesson complete');
   }
 
   // --- ambience: quiet fire-crackle over low room noise --------------------------

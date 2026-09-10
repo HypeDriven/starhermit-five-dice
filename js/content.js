@@ -274,8 +274,12 @@ export function practiceDef(opts = {}) {
   const aiCount = Math.min(4 - humans, Math.max(0, opts.aiOpponents ?? (humans === 1 ? 1 : 0)));
   const players = [];
   for (let i = 0; i < humans; i++) players.push({ name: humans > 1 ? `Player ${i + 1}` : 'You' });
-  const names = ['Pip', 'Bram', 'Halla'];
-  for (let i = 0; i < aiCount; i++) players.push({ name: names[i], isAI: true, difficulty });
+  const firstName = { ember: 'Pip', hearth: 'Bram', summit: 'Halla' }[difficulty];
+  const pool = ['Pip', 'Bram', 'Halla'];
+  for (let i = 0; i < aiCount; i++) {
+    const name = i === 0 ? firstName : pool.find((n) => !players.some((p) => p.name === n));
+    players.push({ name, isAI: true, difficulty });
+  }
   const solo = players.length === 1;
   return {
     id: `practice-${difficulty}-${humans}v${aiCount}`, v: CONTENT_VERSION, rulesV: RULES_VERSION,

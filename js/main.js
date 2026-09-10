@@ -25,6 +25,7 @@ async function boot() {
   const session = new Session(platform, (e) => handleEvent(e));
   platform.onAchievements = (keys) => {
     platform.lastAchievements = [...(platform.lastAchievements || []), ...keys];
+    audio.achievement();
     ui?.toast(`🏆 Achievement unlocked: ${keys.join(', ')}`);
   };
 
@@ -136,6 +137,7 @@ async function boot() {
         platform.track('round-end', { mode: session.def?.mode });
         setTimeout(() => {
           session.transition('results', session.state.terminalReason);
+          audio.result(session.outcome().won);
           ui.showResults(session.resultRecord(), session.outcome());
           session.transition('progression', 'results-shown');
         }, platform.settings.reducedMotion ? 200 : 1400);
@@ -164,16 +166,19 @@ async function boot() {
     let n = 3;
     el.textContent = String(n);
     ui.announce('Table ready. Starting in 3.');
+    audio.countdownTick();
     const tick = () => {
       n -= 1;
       if (n <= 0) {
         el.hidden = true;
+        audio.countdownTick(true);
         session.beginActive();
         ui.announce('Go!');
         scheduleAI();
         return;
       }
       el.textContent = String(n);
+      audio.countdownTick();
       setTimeout(tick, 700);
     };
     setTimeout(tick, 700);

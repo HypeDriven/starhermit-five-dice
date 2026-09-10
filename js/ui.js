@@ -196,7 +196,7 @@ export class UI {
     this.setStatus(p.hosted ? 'Connected to lodge servers' : 'Local play — fully offline-capable');
     this.setHudVisible(false);
 
-    this.openOverlay('Five Dice', (c) => {
+    const title = this.openOverlay('Five Dice', (c) => {
       c.append(this.h('p', {
         text: 'A cozy mountain-lodge dice table. Roll five dice up to three times, ' +
           'hold the keepers, and fill your card — highest total wins.',
@@ -221,6 +221,9 @@ export class UI {
       c.append(list);
       c.append(this.h('p', { class: 'muted', text: `Content v${CONTENT_VERSION} · Rules v1 · seed-fair: every table is replayable and inspectable.` }));
     }, { dismissible: false });
+    // Lodge key art behind the title card (CSS background: a missing file
+    // simply leaves the plain dimmed backdrop).
+    title.parentElement?.classList.add('title-backdrop');
   }
 
   showPracticeSetup() {
@@ -659,6 +662,13 @@ export class UI {
     const won = record.status === 'won';
     const b = record.score;
     this.openOverlay('Results', (c) => {
+      // Verdict illustration; hides itself if the asset fails to load.
+      const art = this.h('img', {
+        class: 'results-art', alt: '', 'aria-hidden': 'true', decoding: 'async',
+        src: won ? 'assets/results-win.webp' : 'assets/results-lose.webp',
+      });
+      art.addEventListener('error', () => art.remove());
+      c.append(art);
       c.append(this.h('h2', { text: won ? '🏔 You take the table!' : record.reason === 'gave-up' ? 'Table forfeited' : record.reason === 'time-limit' ? '⏱ The blizzard wins' : 'The lodge keeps its crown' }));
       c.append(this.h('p', { text: `Your card: upper ${b.upper} + bonus ${b.bonus} + lower ${b.lower} = ${b.grand} points · ${record.invalid} invalid action${record.invalid === 1 ? '' : 's'} · ${(record.durationMs / 1000).toFixed(0)}s` }));
       if (this.session.def?.par?.score) {
@@ -757,6 +767,7 @@ export class UI {
         if (e.done) {
           this.settings.tutorialsDone[this.session.def.id] = true;
           this.platform.saveSettings();
+          this.env.audio.lessonComplete();
           this.toast('Lesson complete — finish the table!');
         }
         this.updateHUD();

@@ -53,6 +53,7 @@ const MIME = {
   '.mp3': 'audio/mpeg',
   '.ogg': 'audio/ogg',
   '.opus': 'audio/ogg',
+  '.webp': 'image/webp',
   '.glb': 'model/gltf-binary',
   '.woff2': 'font/woff2',
   '.ts': 'application/javascript; charset=utf-8',
@@ -86,7 +87,8 @@ function startServer() {
     });
   });
   return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port }));
+    // PORT (if set) pins the embedded server; otherwise an ephemeral port.
+    server.listen(Number(process.env.PORT) || 0, '127.0.0.1', () => resolve({ server, port: server.address().port }));
   });
 }
 

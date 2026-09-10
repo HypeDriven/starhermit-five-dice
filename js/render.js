@@ -92,6 +92,9 @@ export class Renderer {
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(42, 1, 0.1, 60);
+    // Dice and their held markers live on the gameplay layer (raycast
+    // target); the camera must render that layer as well as the environment.
+    this.camera.layers.enable(LAYER_GAME);
     this.applyCameraPreset(this.settings.cameraTilt || 'standard', true);
 
     this.buildEnvironment();

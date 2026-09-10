@@ -1,0 +1,25 @@
+# Five Dice — canonical SFX manifest. One line per clip:
+# file | event id (js/audio.js) | description of the sound | usage context
+# All clips: MOSS-SoundEffect v2.0, 48 kHz mono Opus, loudness-normalized (-20 LUFS), 100 steps.
+dice-roll.opus | roll | Five wooden dice shaken in a leather cup and spilled onto felt, rattling then settling with soft knocks | Every 'roll' rules event (human or AI); synth die-ticks per rolled die are the fallback
+die-hold.opus | hold (held=true) | A single wooden die pressed firmly onto felt, soft muted thud | Toggling a die into the held row (tap, 1-5 keys, Enter on a focused die)
+die-release.opus | hold (held=false) | A wooden die lifted off felt, faint tacky fabric release and a light tap | Toggling a held die back to the rolling row
+score-points.opus | score (points>0, plain) | One small brass scoring bell over a warm wooden counter knock, cheerful | Scoring any positive value that is not a made fixed-point hand or an Avalanche
+score-hand.opus | score-hand (Full Lodge / Ridge Path / Summit Trail made) | Three quick ascending wooden xylophone notes ending in a soft token knock on felt | Scoring 25/30/40 in a fixed-point lower hand; tier above plain points, below Avalanche
+score-avalanche.opus | score (Avalanche, 50) | Cascading tumble of small stones and wooden tokens down a wooden chute, bright and celebratory | Scoring five of a kind for 50; also increments the Avalanche Caller achievement
+score-zero.opus | score (points=0) | A dull single knock of a wooden token set down on felt, flat and disappointing | Sacrificing a category for zero
+score-bonus.opus | score-bonus | Warm rising glockenspiel chord followed by one soft brass bell strike | Layered after the score cue on the exact upper-row score that crosses 63 and earns the 35-point lodge bonus
+turn-start.opus | turn | A soft wooden card sliding across felt and stopping with a gentle tap | Each 'turn' rules event: the seat passes to the next player
+invalid-move.opus | invalid | Short muted knock of a wooden piece bumped sideways against a table edge, disapproving | Any rejected action recorded by the rules (roll with none left, hold before rolling, closed category)
+finish-cards.opus | finish (cards-complete) | Triumphant cascade of small brass bells and wooden chimes over a crackling fireplace | The table closes because every card is full (regardless of who won)
+finish-table.opus | finish (time-limit / gave-up) | Two soft wooden mallets on a marimba in a gentle descending phrase, conclusive | The table closes by blizzard clock expiry or forfeit
+result-win.opus | result-win | Short triumphant fireside fanfare of glockenspiel and brass bells rising to a shimmer | Results overlay opens (1.4 s after finish; 0.2 s with reduced motion) and the local seat won
+result-lose.opus | result-lose | Gentle descending three-note marimba phrase with a soft sigh of wind at a cabin window | Results overlay opens and the local seat did not win (lost, forfeited, timed out)
+hint-chime.opus | hint | A single delicate glass chime note with a soft shimmer, suggestive | Hint button / H key / gamepad Y where the content allows hints
+undo-sweep.opus | undo | Quick reversed paper-and-felt whoosh, like a card swept back across the table | Undo turn (U key, button, gamepad B) restoring the start of the current human turn
+ui-click.opus | uiClick | Short crisp fingernail tap on a small polished wooden button | Every menu/top-bar button and every guarded play input acknowledgement; also unlocks the AudioContext
+countdown-tick.opus | countdown | Single soft knock of a wooden mallet on a hollow wooden block in a quiet room | Each number of the 3-2-1 countdown before a non-lesson table goes active
+countdown-go.opus | countdown-go | Two quick bright taps of a wooden mallet on a small brass bell, inviting | The countdown reaches zero and the table becomes active (skipped under reduced motion)
+achievement-unlock.opus | achievement | Bright metallic sparkle of small bells in quick succession with a glassy shimmer tail | An achievement key is granted for the first time (toast + results list)
+lesson-complete.opus | lesson-complete | Cheerful two-note ascending chime on a small glass bell, encouraging | The final step of a Learn lesson is satisfied ("Lesson complete — finish the table!")
+ambience-hearth.opus | ambience (loop) | Log fire crackling gently in a stone fireplace inside a quiet cabin, soft pops, low hiss, faint wind outside | Looped on the ambience bus from the first user gesture; replaces the synthesized room noise + crackle once decoded

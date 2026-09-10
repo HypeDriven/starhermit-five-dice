@@ -25,6 +25,10 @@ const MIME = {
   '.json': 'application/json; charset=utf-8',
   '.txt': 'text/plain; charset=utf-8',
   '.opus': 'audio/ogg',
+  '.webp': 'image/webp',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
 };
 
 // --- durable stores (JSON files, compact) ---------------------------------------
