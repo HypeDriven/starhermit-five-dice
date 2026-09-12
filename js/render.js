@@ -357,6 +357,7 @@ export class Renderer {
 
   applyCameraPreset(name, instant = false) {
     const p = CAMERA_PRESETS[name] || CAMERA_PRESETS.standard;
+    this._presetName = name;
     this.camera.fov = p.fov;
     this.camera.updateProjectionMatrix();
     const to = new THREE.Vector3(...p.pos);
@@ -365,6 +366,7 @@ export class Renderer {
       this.camera.position.copy(to);
       this.camera.lookAt(look);
       this._camLook = look;
+      this._fitAspect();
       return;
     }
     // Authored interruptible transition (fixed duration, absolute targets —
@@ -375,7 +377,8 @@ export class Renderer {
       this.camera.position.lerpVectors(from, to, t);
       this._camLook = fromLook.clone().lerp(look, t);
       this.camera.lookAt(this._camLook);
-    });
+    }, () => this._fitAspect());
+    this.tweens[this.tweens.length - 1].camera = true;
   }
 
   // --- tweens -----------------------------------------------------------------------
@@ -488,6 +491,24 @@ export class Renderer {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.gl.setSize(w, h, false);
+    this._fitAspect();
+  }
+
+  // Narrow (portrait) aspects: pull the camera back along its line of sight
+  // until all five dice home slots fit horizontally with a margin.
+  _fitAspect() {
+    const look = this._camLook || new THREE.Vector3(...CAMERA_PRESETS.standard.look);
+    const preset = CAMERA_PRESETS[this._presetName] || CAMERA_PRESETS.standard;
+    const base = new THREE.Vector3(...preset.pos);
+    const dir = base.clone().sub(look).normalize();
+    const baseDist = base.distanceTo(look);
+    const halfW = DIE_SPREAD * 2 + 0.9; // outer die centre plus a die width
+    const tanH = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * this.camera.aspect;
+    const need = halfW / (tanH * 0.9);
+    const dist = Math.max(baseDist, need);
+    if (this.tweens.some((tw) => tw.camera)) return; // a preset transition owns the camera right now
+    this.camera.position.copy(look).addScaledVector(dir, dist);
+    this.camera.lookAt(look);
   }
 
   start() {

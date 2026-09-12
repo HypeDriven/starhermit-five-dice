@@ -482,7 +482,8 @@ export class UI {
     const left = st.players[0].scores;
     const filled = Object.values(left).filter((v) => v != null).length;
     const total = Object.keys(left).length;
-    let status = `${def.name} — round ${st.round} · ${me.name}${me.isAI ? ' (AI)' : ''} to act · rolls left ${st.rollsLeft}`;
+    // Turn-critical facts come first so a narrow status line never truncates them.
+    let status = `${me.name}${me.isAI ? ' (AI)' : ''} to act · rolls left ${st.rollsLeft} · round ${st.round} — ${def.name}`;
     if (st.limits.totalMs != null) {
       const remain = Math.max(0, st.limits.totalMs - this.session.nowMs());
       status += ` · ⏱ ${Math.floor(remain / 60000)}:${String(Math.floor(remain / 1000) % 60).padStart(2, '0')}`;

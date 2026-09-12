@@ -53,6 +53,11 @@ button:focus-visible, [tabindex]:focus-visible, a:focus-visible {
 }
 .game-title { font-size: 1.25rem; letter-spacing: 0.04em; color: var(--accent); }
 .session-status { flex: 1; font-size: 0.9em; opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 1023px) and (orientation: portrait) {
+  /* two lines on phones: actor / rolls stay readable before the mode name */
+  .session-status { white-space: normal; font-size: 0.82em; line-height: 1.2; max-height: 2.4em; }
+  .game-title { display: none; }
+}
 .topbar-actions { display: flex; gap: 0.4rem; }
 .icon-btn {
   min-width: 44px; min-height: 44px; border: 1px solid var(--line); border-radius: 0.5rem;
@@ -272,8 +277,15 @@ body.reduced-motion .rail { transition: none; }
 }
 /* Landscape mobile: narrow status rail preserved; big targets kept. */
 @media (max-width: 1023px) and (orientation: landscape) {
-  .dice-tray { right: calc(0.6rem + var(--sar)); left: auto; transform: none; flex-direction: column; bottom: auto; top: 50%; translate: 0 -50%; }
-  .action-tray { bottom: calc(0.5rem + var(--sab)); }
+  /* dice column sits below the drawer-toggle row and above the action tray,
+     so neither toggle ever overlaps a die */
+  .dice-tray {
+    right: calc(0.6rem + var(--sar)); left: auto; transform: none; translate: none;
+    flex-direction: column; top: 3.6rem; bottom: calc(4.2rem + var(--sab));
+    justify-content: space-between; gap: 0.2rem;
+  }
+  .dice-tray .die-btn { width: min(56px, calc((100vh - 8.5rem) / 5 - 0.2rem)); height: min(56px, calc((100vh - 8.5rem) / 5 - 0.2rem)); min-width: 40px; min-height: 40px; }
+  .action-tray { bottom: calc(0.5rem + var(--sab)); left: 0.6rem; transform: none; }
 }
 
 body.left-handed .drawer-toggle.left { left: auto; right: calc(0.6rem + var(--sar)); }
