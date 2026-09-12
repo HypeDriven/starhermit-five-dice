@@ -193,7 +193,7 @@ export class UI {
     const daily = dailyForDate(new Date(p.serverNow()));
     const doneToday = !!p.progress.bestDaily[daily.id];
     const journeyDone = Object.values(p.progress.journey).filter((j) => j.done).length;
-    this.setStatus(p.hosted ? 'Connected to lodge servers' : 'Local play — fully offline-capable');
+    this.setStatus(p.statusLine());
     this.setHudVisible(false);
 
     const title = this.openOverlay('Five Dice', (c) => {
@@ -398,16 +398,23 @@ export class UI {
   async showProfile() {
     const p = this.platform;
     this.openOverlay('Profile & Scores', async (c) => {
-      const nameInput = this.h('input', {
-        type: 'text', value: p.profile.name, maxlength: '20', 'aria-label': 'Display name',
-        onchange: (e) => {
-          p.profile.name = e.target.value.trim() || 'Guest';
-          p.saveProfile();
-          this.toast('Name saved');
-        },
-      });
-      c.append(this.h('div', { class: 'settings-grid' }, this.h('label', {}, 'Display name', nameInput)));
-      c.append(this.h('p', { class: 'muted', text: p.profile.guest ? 'Guest profile — progress is stored on this device. Sign in from the host shell for durable cloud progress.' : 'Signed in.' }));
+      if (p.profile.account) {
+        // Account identity: platform nickname, read-only (never usernames).
+        c.append(this.h('div', { class: 'settings-grid' },
+          this.h('label', {}, 'Player', this.h('span', { text: p.profile.name }))));
+      } else {
+        const nameInput = this.h('input', {
+          type: 'text', value: p.profile.name, maxlength: '20', 'aria-label': 'Display name',
+          onchange: (e) => {
+            p.profile.name = e.target.value.trim() || 'Guest';
+            p.saveProfile();
+            this.toast('Name saved');
+          },
+        });
+        c.append(this.h('div', { class: 'settings-grid' }, this.h('label', {}, 'Display name', nameInput)));
+      }
+      c.append(this.h('p', { class: 'muted', text: p.profile.guest ? 'Guest profile — progress is stored on this device. Sign in from the host shell for durable cloud progress.' : 'Signed in with your account.' }));
+      c.append(this.h('p', { class: 'muted', text: p.syncLabel() }));
 
       const t = p.progress.totals;
       c.append(this.h('h3', { text: 'Lifetime' }));

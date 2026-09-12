@@ -26,7 +26,7 @@ Present tense: this document describes what the shipped game does today. Anythin
 | `js/ai.js` | Deterministic practice AI (`ember`, `hearth`, `summit`) using the rules legality API |
 | `js/content.js` | Versioned content: 5 themes, 4 lessons, 40 journey stages, 5 challenges, daily table, practice factory, offline validators |
 | `js/session.js` | Session controller: state machine, validated dispatch, undo snapshots, lesson gating, session clock, autosave, replay envelope, results record |
-| `js/platform.js` | Local persistence, host detection, `/api/v1` adapter, progress document + checksum, achievements, leaderboards, presence, telemetry |
+| `js/platform.js` | Local persistence, launch-token auth, `/api/v1` adapter (platform cloud slot + dev-server routes), progress document + checksum, achievements, leaderboards, presence, telemetry |
 | `js/render.js` | Three.js scene: felt table, room, window with stars, fireplace glow and embers, five dice with pip textures, held-row markers, camera presets, quality tiers, context-loss rebuild |
 | `js/audio.js` | WebAudio engine: four buses, authored Opus one-shots with synth fallbacks, hearth ambience loop, generative fireside music, captions |
 | `js/ui.js` | DOM shell: title/menus/help/settings/profile/pause/results overlays, HUD (scorecard, dice tray, action tray, table rail), keyboard + gamepad, live announcements |
@@ -244,15 +244,13 @@ Conventions follow https://wiki.starhermit.com/ (manifest, same-origin `/api/v1`
 | Feature | Status |
 |---|---|
 | Manifest `starhermit.txt` | `name`, `launch=index.html`, `owner`, `server=server.js`, `cover=coverart.png` |
-| Launch token | `?launch=` is read at boot and stripped from the address bar; never stored (`platform.js:readLaunchToken`) |
-| Host detection / time | `GET /api/v1/time` within 2.5 s marks the session *hosted* and sets a round-trip-adjusted offset used for the daily boundary (`serverNow`) |
-| Identity / profile | Local guest profile (display name ≤20 chars) in `localStorage`; no account sign-in or avatar use |
-| Presence | `POST /api/v1/presence` every 30 s while hosted |
-| Activity | `POST /api/v1/activity/start` at boot, `/end` on `pagehide` |
-| Cloud save | Progress document (`v`, `rev`, journey, challenges, achievements, totals, streakDays, bestDaily) with a local checksum; `POST/GET /api/v1/save?game=five-dice`; higher `rev` wins, the losing copy is kept (`progress:pre-reconcile` locally, `:conflict:` key on the server) |
-| Leaderboards | Daily and Challenge results submit `{ name, result, envelope }` to `/api/v1/leaderboard/submit`; the server replays the envelope with the shared rules module and rejects stale versions, unknown or altered content, impossible scores, hash or score mismatches and unfinished rounds; boards `daily:<id>` / `challenge:<id>` keep the top 100, idempotent by session id. Profile shows Daily / Challenge / Journey-wins boards (global when hosted, local results otherwise) |
-| Achievements | Six static keys (`first_table`, `lodge_keeper`, `avalanche_caller`, `weekly_regular`, `mastery_stage`, `century_nights`) granted idempotently in the local progress document and toasted; not pushed to a platform achievements endpoint |
-| Telemetry | Funnel events `start`, `tutorial-step`, `round-end`, `retry`, `settings-change`, `error` to `/api/v1/events`, only with the *Anonymous usage telemetry* consent and only when hosted |
+| Launch token | `#game_token=<jwt>` fragment read once at boot and stripped from the address bar (query-param fallbacks local-dev only); `sub`/`game_scope` decoded, slug never hard-coded; `Authorization: Bearer` on every call; re-mint via `POST /api/v1/games/{slug}/launch-token` every 45 min (60 s retry); never stored (`platform.js:readLaunchToken`) |
+| Hosted mode | Activates iff a launch token was read. Dev mode (`npm start`) is detected by `GET /api/v1/time` within 2.5 s and enables the game's own-server routes; the time offset feeds the daily boundary (`serverNow`) |
+| Identity / profile | Hosted: nickname from `GET /api/v1/users/{sub}/profile` (`Player `+id8 fallback) shown read-only in the name/status slot; usernames never displayed, `/api/v1/me` never called. Offline: local guest profile (display name ≤20 chars) in `localStorage` |
+| Cloud save | Progress document (`v`, `rev`, journey, challenges, achievements, totals, streakDays, bestDaily) with a local checksum; localStorage is the offline cache. Hosted: one platform slot `PUT/GET /api/v1/me/cloud-saves/{slug}` (zip+base64, ~2 s debounce + `pagehide`/`visibilitychange` flush, higher `rev` wins, sync status shown). Dev: own-server `POST/GET /api/v1/save?game=five-dice` with revision reconcile, losing copy kept |
+| Leaderboards | Daily/Challenge results submit `{name, result, envelope}` to the game's own server (`/api/v1/leaderboard/submit`, replay-validated) in local dev only; clients never submit hosted. Hosted boards are read-only: `GET /api/v1/games/{slug}` → `leaderboardId`, then `GET /api/v1/leaderboards/{leaderboardId}/entries?friendsOnly=&page=&pageSize=` with nicknames resolved via the profile helper; Journey wins and personal bests stay local |
+| Achievements | Six static keys (`first_table`, `lodge_keeper`, `avalanche_caller`, `weekly_regular`, `mastery_stage`, `century_nights`) granted idempotently in the local progress document (part of the cloud-saved doc) and toasted; `server.js` is not a Jint script, so no platform unlock endpoint is called |
+| Presence / activity / telemetry | `POST /api/v1/presence` every 30 s, `/activity/start`+`/end`, funnel events to `/api/v1/events` — own dev server only (`npm start`); no-ops hosted, where the platform has no such per-game endpoints |
 | Server script | `server.js`: static host that refuses `data/`, 120 req/min/IP rate limit with `retry-after`, 256 KB payload cap, structured `{ "error": … }` responses |
 | Not used | Friends, invitations, matchmaking, hosted multiplayer sessions, chat, voice, peer relay, platform achievement/leaderboard APIs beyond the game's own routes |
 
@@ -305,7 +303,7 @@ Conventions follow https://wiki.starhermit.com/ (manifest, same-origin `/api/v1`
 - Journey stage cards show "n. Mastery" for mastery stages and just "n." otherwise; trail names are headings, stage names appear only in the aria-label and the status line.
 - In portrait phones the outer dice can sit outside the 3D camera frustum; the DOM dice tray is authoritative.
 - `server.js` serves `tests/` and dotfiles (only `data/` is refused); `tests/smoke.html` depends on this and is not part of `npm test`.
-- Leaderboards in local mode list only the current device's results; hosted boards need the game's own `server.js` routes.
+- On-platform global boards appear only when the platform lists a `leaderboardId` for the game; Journey wins remain local-only.
 - The Blizzard Clock is enforced when a command or the once-a-second heartbeat arrives, so expiry can register up to one second late.
 
 ## Design intent not yet implemented
@@ -313,5 +311,5 @@ Conventions follow https://wiki.starhermit.com/ (manifest, same-origin `/api/v1`
 - Localization into en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT with a string table and a language selector.
 - Colour-vision-safe palette variants and a real timing-assistance mode (slower AI pacing, longer confirm windows).
 - Key-binding remap UI on top of the existing `settings.bindings` override.
-- Platform achievements and friends-filtered boards through the host APIs; hosted invitations and pass-and-play across devices.
+- Platform achievements (needs a Jint server script, which `server.js` is not) and hosted invitations/pass-and-play across devices.
 - Machine states `title`, `mode-select`, `reconnecting` driven by the UI so the state machine mirrors every screen.

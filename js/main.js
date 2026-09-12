@@ -17,6 +17,8 @@ async function boot() {
   platform.verifyProgress();
   if (platform.hosted) {
     platform.reconcileProgress().catch(() => {});
+  }
+  if (platform.devApi) {
     platform.startPresence();
     platform.activityStart();
   }
@@ -109,6 +111,8 @@ async function boot() {
   const ui = new UI(env);
   env.ui = ui;
   ui.applyTheme(getTheme(platform.settings.theme));
+  // Account nickname / cloud sync arrived after boot: refresh the title status.
+  platform.onStatusChange = () => { if (!ui.hudVisible) ui.setStatus(platform.statusLine()); };
 
   // --- session event routing ---------------------------------------------------
 
@@ -274,10 +278,12 @@ async function boot() {
     if (hidden) {
       session.background(); // backgrounding pauses solo simulation
       session.saveSnapshot();
+      platform.pushCloudSave(); // flush the debounced cloud save
     }
   });
   window.addEventListener('pagehide', () => {
     session.saveSnapshot();
+    platform.pushCloudSave(); // flush the debounced cloud save
     platform.activityEnd();
   });
   window.addEventListener('resize', () => renderer?.resize());
