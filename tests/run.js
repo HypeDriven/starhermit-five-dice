@@ -16,6 +16,11 @@ import {
   practiceDef, dailyForDate, findContent, CONTENT_VERSION,
 } from '../js/content.js';
 import { aiStep, AI_DIFFICULTIES } from '../js/ai.js';
+import {
+  detectPreset, resolve as gfxResolve, presetTier, choosePreset, describe as gfxDescribe,
+  PRESETS as GFX_PRESETS, CATEGORIES as GFX_CATEGORIES,
+} from '../js/gfx.js';
+import { gfxStrings, pickLocale, GFX_LOCALES } from '../js/gfx-i18n.js';
 
 let passed = 0;
 let failed = 0;
@@ -579,6 +584,63 @@ test('session: autosave snapshot round-trips incl. stats', () => {
   eq(hashState(s2.state), hashState(s.state), 'restored state hash matches');
   eq(s2.stats.avalanches, 1, 'stats restored with the snapshot');
   eq(s2.checkpoints.length, 1, 'checkpoints reset to a fresh init hash');
+});
+
+// --- graphics quality model (js/gfx.js) -------------------------------------------
+
+test('gfx: detectPreset maps GPU strings to tiers, touch caps at balanced', () => {
+  eq(detectPreset('ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)'), 'low');
+  eq(detectPreset('llvmpipe (LLVM 15.0.7, 256 bits)'), 'low');
+  eq(detectPreset('ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0)'), 'high');
+  eq(detectPreset('Apple M2'), 'high');
+  eq(detectPreset('ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11)'), 'balanced');
+  eq(detectPreset('Adreno (TM) 640'), 'balanced');
+  eq(detectPreset(''), 'balanced');
+  eq(detectPreset('Apple M1', { mobile: true }), 'balanced', 'touch cap');
+  eq(detectPreset('SwiftShader', { mobile: true }), 'low');
+});
+
+test('gfx: resolve applies auto, preset rows, overrides and scale clamp', () => {
+  const auto = gfxResolve({}, 'low');
+  eq(auto.preset, 'low'); eq(auto.auto, true); eq(auto.shadows, 'off'); eq(auto.post, false, 'low renders without post');
+  eq(auto.adaptive, true); eq(auto.showFps, false);
+  const hi = gfxResolve({ preset: 'high' }, 'low');
+  eq(hi.preset, 'high'); eq(hi.auto, false); eq(hi.shadows, presetTier('high', 'shadows')); eq(hi.post, true);
+  const ov = gfxResolve({ preset: 'high', bloom: 'off', particles: 'bogus' }, 'low');
+  eq(ov.bloom, 'off', 'override wins'); eq(ov.particles, presetTier('high', 'particles'), 'invalid override ignored');
+  eq(gfxResolve({ render_scale: 5 }, 'high').renderScale, 2, 'scale clamps high');
+  eq(gfxResolve({ render_scale: 0.1 }, 'high').renderScale, 0.5, 'scale clamps low');
+  eq(gfxResolve({ preset: 'nope' }, undefined).preset, 'balanced', 'unknown falls back');
+  eq(gfxResolve({ adaptive: false, show_fps: true }, 'low').adaptive, false);
+  for (const p of GFX_PRESETS) for (const cat of Object.keys(GFX_CATEGORIES)) {
+    ok(GFX_CATEGORIES[cat].includes(presetTier(p, cat)), `${p}.${cat} valid`);
+  }
+});
+
+test('gfx: choosing a preset clears overrides, keeps scale/adaptive/fps', () => {
+  const next = choosePreset({ preset: 'high', bloom: 'off', shadows: 'high', render_scale: 1.5, show_fps: true }, 'ultra');
+  eq(next.preset, 'ultra'); eq(next.bloom, undefined); eq(next.shadows, undefined);
+  eq(next.render_scale, 1.5); eq(next.show_fps, true);
+  eq(choosePreset({}, 'auto').preset, 'auto');
+  ok(/no shadows/.test(gfxDescribe(gfxResolve({}, 'low'), [640, 480])), 'describe summary');
+  ok(/640×480 px/.test(gfxDescribe(gfxResolve({}, 'low'), [640, 480])), 'describe pixels');
+});
+
+test('gfx: panel strings exist in every supported locale', () => {
+  for (const loc of ['en-US', 'en-GB', 'es-419', 'es-ES', 'de-DE', 'fr-FR', 'fr-CA', 'pt-BR', 'it-IT']) {
+    ok(GFX_LOCALES.includes(loc), `${loc} present`);
+  }
+  eq(pickLocale('es-MX'), 'es-419'); eq(pickLocale('fr-CA'), 'fr-CA'); eq(pickLocale('pt-PT'), 'pt-BR'); eq(pickLocale('ja'), 'en-US');
+  const en = gfxStrings('en-US');
+  eq(gfxStrings('de-DE')('title'), 'Grafik');
+  eq(en('auto', { tier: 'Low' }), 'Auto (detected: Low)');
+  const keys = ['title', 'quality', 'auto', 'renderScale', 'fromPreset', 'adaptive', 'showFps', 'postFailed',
+    ...Object.keys(GFX_CATEGORIES).map((c) => `cat_${c}`)];
+  for (const loc of GFX_LOCALES) {
+    const t = gfxStrings(loc);
+    for (const k of keys) ok(t(k) && t(k) !== k, `${loc}:${k}`);
+    if (!loc.startsWith('en')) ok(t('title') !== en('title'), `${loc} translated`);
+  }
 });
 
 // --- server: authoritative submission validation (integration) --------------------

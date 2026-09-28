@@ -14,6 +14,11 @@ import {
   practiceDef, dailyForDate, CONTENT_VERSION,
 } from './content.js';
 import { ACHIEVEMENTS } from './platform.js';
+import {
+  PRESETS as GFX_PRESETS, CATEGORIES as GFX_CATEGORIES, resolve as gfxResolve,
+  presetTier as gfxPresetTier, choosePreset as gfxChoosePreset, describe as gfxDescribe,
+} from './gfx.js';
+import { gfxStrings } from './gfx-i18n.js';
 
 const PIP_GLYPHS = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
 
@@ -137,8 +142,10 @@ export class UI {
 
   // --- overlays -----------------------------------------------------------------
 
-  openOverlay(kind, build, { dismissible = true } = {}) {
+  openOverlay(kind, build, { dismissible = true, onClose = null } = {}) {
+    this._onClose = null; // replacing an overlay never fires its close hook
     this.closeOverlay();
+    this._onClose = onClose;
     this.lastFocus = document.activeElement;
     const content = this.h('div', { class: 'overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': kind });
     if (dismissible) {
@@ -168,6 +175,9 @@ export class UI {
     this.overlay = null;
     this.overlayKind = null;
     if (this.lastFocus && document.contains(this.lastFocus)) this.lastFocus.focus();
+    const cb = this._onClose;
+    this._onClose = null;
+    cb?.();
   }
 
   confirm(message, onYes) {
@@ -218,6 +228,7 @@ export class UI {
       add('Challenges', 'constrained tables for sharp players', () => this.showChallenges());
       add('Profile & Scores', 'achievements, leaderboards, stats', () => this.showProfile());
       add('Help & Rules', 'how a table works', () => this.showHelp());
+      add('Settings', 'audio, display, graphics, controls', () => this.showSettings({ onClose: () => this.showTitle() }));
       c.append(list);
       c.append(this.h('p', { class: 'muted', text: `Content v${CONTENT_VERSION} · Rules v1 · seed-fair: every table is replayable and inspectable.` }));
     }, { dismissible: false });
@@ -323,10 +334,15 @@ export class UI {
 
   // --- settings ---------------------------------------------------------------------
 
-  showSettings() {
+  showSettings({ onClose = null } = {}) {
     const s = this.settings;
     this.openOverlay('Settings', (c) => {
-      const grid = this.h('div', { class: 'settings-grid' });
+      let grid = null;
+      const section = (title) => {
+        c.append(this.h('h3', { text: title }));
+        grid = this.h('div', { class: 'settings-grid' });
+        c.append(grid);
+      };
       const save = () => { this.platform.saveSettings(); this.applySettingsClasses(); this.env.onSettingsChanged?.(); };
       const slider = (label, key) => {
         const input = this.h('input', {
@@ -349,7 +365,7 @@ export class UI {
         grid.append(this.h('label', {}, label, sel));
       };
 
-      c.append(this.h('h3', { text: 'Audio' }));
+      section('Audio');
       slider('Music', 'volMusic');
       slider('Effects', 'volEffects');
       slider('Ambience', 'volAmbience');
@@ -357,22 +373,25 @@ export class UI {
       toggle('Mute all', 'muted');
       toggle('Captions for audio cues', 'captions');
 
-      c.append(this.h('h3', { text: 'Graphics' }));
+      section('Display');
       select('Theme', 'theme', THEMES.map((t) => [t.id, t.name]));
-      select('Quality tier', 'quality', [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']]);
       select('Camera', 'cameraTilt', [['standard', 'Standard'], ['low', 'Low'], ['overhead', 'Overhead']]);
       toggle('Reduced motion', 'reducedMotion');
       toggle('High contrast', 'highContrast');
       select('Color-vision palette', 'palette', [['default', 'Default'], ['deuteranopia', 'Deuteranopia-safe'], ['protanopia', 'Protanopia-safe'], ['tritanopia', 'Tritanopia-safe']]);
 
-      c.append(this.h('h3', { text: 'Controls & access' }));
+      const gfx = this.h('section', { id: 'gfx-section', class: 'gfx-section' });
+      c.append(gfx);
+      this.buildGraphicsSection(gfx, save);
+
+      section('Controls & access');
       toggle('Larger text', 'largeText');
       toggle('Left-handed controls', 'leftHanded');
       toggle('Hold to confirm scoring', 'holdToConfirm');
       toggle('Timing assistance', 'timingAssist');
       toggle('Haptics', 'haptics');
 
-      c.append(this.h('h3', { text: 'Privacy' }));
+      section('Privacy');
       const consent = this.h('input', {
         type: 'checkbox', ...(this.platform.consent.telemetry ? { checked: true } : {}),
         onchange: (e) => {
@@ -384,13 +403,104 @@ export class UI {
       });
       grid.append(this.h('label', {}, 'Anonymous usage telemetry', consent));
 
-      c.append(grid);
       c.append(this.h('div', { class: 'btn-row', style: 'margin-top:0.8rem' },
         this.h('button', {
           type: 'button', class: 'btn', text: 'Replay tutorials',
           onclick: () => { s.tutorialsDone = {}; save(); this.toast('Tutorials reset'); },
         })));
+    }, { onClose });
+  }
+
+  // Graphics section (localized): quality preset, render scale, per-effect
+  // overrides, adaptive resolution, frame-rate readout and a cost summary.
+  // Rebuilt in place after each change so "From preset (…)" labels follow.
+  buildGraphicsSection(root, save) {
+    const t = gfxStrings();
+    const s = this.settings;
+    const saved = () => (s.graphics && typeof s.graphics === 'object' ? s.graphics : (s.graphics = {}));
+    const renderer = this.env.getRenderer?.();
+    const info = renderer?.graphicsInfo?.();
+    const detected = info?.detected || 'balanced';
+    const r = gfxResolve(saved(), detected);
+    const commit = (next) => {
+      s.graphics = next;
+      document.body.dataset.gfxPreset = gfxResolve(next, detected).preset;
+      save();
+      const focusId = document.activeElement?.id;
+      this.buildGraphicsSection(root, save);
+      if (focusId) document.getElementById(focusId)?.focus();
+    };
+    const tierName = (tier) => t(tier);
+    root.replaceChildren();
+    root.append(this.h('h3', { text: t('title') }));
+    const grid = this.h('div', { class: 'settings-grid' });
+    root.append(grid);
+    const row = (label, control) => grid.append(this.h('label', {}, label, control));
+
+    const presetSel = this.h('select', {
+      id: 'gfx-preset', 'data-gfx': 'preset', 'aria-label': t('quality'),
+      onchange: (e) => commit(gfxChoosePreset(saved(), e.target.value)),
+    }, [['auto', t('auto', { tier: tierName(detected) })], ...GFX_PRESETS.map((p) => [p, tierName(p)])]
+      .map(([v, name]) => this.h('option', { value: v, text: name, ...((r.auto ? 'auto' : r.preset) === v ? { selected: true } : {}) })));
+    row(t('quality'), presetSel);
+
+    const pct = Math.round(r.renderScale * 100);
+    const scaleOut = this.h('output', { class: 'range-value', id: 'gfx-scale-value', text: `${pct}%` });
+    const scale = this.h('input', {
+      type: 'range', id: 'gfx-scale', 'data-gfx': 'render_scale', min: '50', max: '200', step: '5',
+      value: String(pct), 'aria-label': t('renderScale'),
+      oninput: (e) => { scaleOut.textContent = `${e.target.value}%`; },
+      onchange: (e) => commit({ ...saved(), render_scale: Number(e.target.value) / 100 }),
     });
+    row(t('renderScale'), this.h('span', { class: 'range-wrap' }, scale, scaleOut));
+
+    for (const [cat, tiers] of Object.entries(GFX_CATEGORIES)) {
+      const own = tiers.includes(saved()[cat]) ? saved()[cat] : 'preset';
+      const sel = this.h('select', {
+        id: `gfx-${cat}`, 'data-gfx-cat': cat, 'aria-label': t(`cat_${cat}`),
+        onchange: (e) => {
+          const next = { ...saved() };
+          if (e.target.value === 'preset') delete next[cat];
+          else next[cat] = e.target.value;
+          commit(next);
+        },
+      }, [['preset', t('fromPreset', { tier: tierName(gfxPresetTier(r.preset, cat)) })], ...tiers.map((v) => [v, tierName(v)])]
+        .map(([v, name]) => this.h('option', { value: v, text: name, ...(own === v ? { selected: true } : {}) })));
+      row(t(`cat_${cat}`), sel);
+    }
+
+    const check = (id, key, label, on) => row(label, this.h('input', {
+      type: 'checkbox', id, 'data-gfx': key, ...(on ? { checked: true } : {}),
+      onchange: (e) => commit({ ...saved(), [key]: e.target.checked }),
+    }));
+    check('gfx-adaptive', 'adaptive', t('adaptive'), r.adaptive);
+    check('gfx-fps', 'show_fps', t('showFps'), r.showFps);
+
+    const summary = this.h('p', { id: 'gfx-summary', class: 'muted gfx-summary' });
+    const note = this.h('p', { id: 'gfx-note', class: 'muted gfx-note', hidden: true });
+    root.append(summary, note);
+    const words = {};
+    for (const k of ['noShadows', 'shadows', 'ao', 'aoHigh', 'bloom', 'noAA', 'reflections', 'particles']) words[k] = t(`w_${k}`);
+    const refresh = () => {
+      const rr = this.env.getRenderer?.();
+      const i = rr?.graphicsInfo?.();
+      if (!i) {
+        summary.textContent = `${t('unknownGpu')} · ${gfxDescribe(r, null, words)}`;
+        note.textContent = t('no3d');
+        note.hidden = false;
+        return;
+      }
+      summary.textContent = `${i.gpu || t('unknownGpu')} · ${gfxDescribe(i.resolved, i.pixels, words)}`;
+      note.textContent = t('postFailed');
+      note.hidden = !i.postFailed;
+    };
+    refresh();
+    // Pixel size settles after the next frame(s); keep the line live while open.
+    clearInterval(this._gfxTimer);
+    this._gfxTimer = setInterval(() => {
+      if (!root.isConnected) { clearInterval(this._gfxTimer); return; }
+      refresh();
+    }, 500);
   }
 
   // --- profile / leaderboards ---------------------------------------------------------

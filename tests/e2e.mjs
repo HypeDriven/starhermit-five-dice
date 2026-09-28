@@ -106,8 +106,8 @@ async function playPass(browser, base, { tag, viewport, mobile }) {
   const errors = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   page.on('console', (m) => {
-    if (m.type() !== 'error' || browserNoise.test(m.text())) return;
-    errors.push(`console: ${m.text()}`);
+    if (!['error', 'warning'].includes(m.type()) || browserNoise.test(m.text())) return;
+    errors.push(`console ${m.type()}: ${m.text()}`);
   });
   const checkErrors = () => {
     if (errors.length) throw new Error(`${tag} pass page errors:\n${errors.join('\n')}`);
@@ -121,6 +121,57 @@ async function playPass(browser, base, { tag, viewport, mobile }) {
       const status = await page.textContent('#session-status');
       if (!/Connected|offline/i.test(status)) throw new Error('unexpected session status: ' + status);
       await page.screenshot({ path: SHOT('title', tag) });
+    });
+
+    await step(`[${tag}] settings → Graphics: presets, override, persistence`, async () => {
+      // Reached from the title menu's Settings entry (closing returns to the title).
+      const openGfx = async () => {
+        await page.locator('.overlay .menu-list button', { hasText: 'Settings' }).click();
+        await page.waitForSelector('.overlay[aria-label="Settings"] #gfx-section');
+        await page.locator('#gfx-preset').scrollIntoViewIfNeeded();
+      };
+      const presetAttr = () => page.evaluate(() => document.body.dataset.gfxPreset);
+      const saved = () => page.evaluate(() => JSON.parse(localStorage.getItem('fivedice:settings')).graphics);
+      await openGfx();
+      // Software GPU in headless runs: Auto resolves to Low.
+      if (await presetAttr() !== 'low') throw new Error('auto did not resolve to low: ' + await presetAttr());
+      const autoLabel = await page.locator('#gfx-preset option[value="auto"]').textContent();
+      if (!/Auto \(detected: Low\)/.test(autoLabel)) throw new Error('auto label: ' + autoLabel);
+      await page.selectOption('#gfx-preset', 'low');
+      await page.waitForFunction(() => document.body.dataset.gfxPreset === 'low');
+      await page.selectOption('#gfx-preset', 'ultra');
+      await page.waitForFunction(() => document.body.dataset.gfxPreset === 'ultra');
+      await page.waitForTimeout(600); // a few Ultra frames (post chain built)
+      await page.selectOption('#gfx-preset', 'high');
+      await page.waitForFunction(() => document.body.dataset.gfxPreset === 'high');
+      await page.waitForFunction(() => /bloom/.test(document.getElementById('gfx-summary').textContent));
+      await page.selectOption('#gfx-bloom', 'off');
+      await page.waitForFunction(() => !/bloom/.test(document.getElementById('gfx-summary').textContent));
+      await page.locator('#gfx-fps').check();
+      await page.waitForSelector('#fps-meter:not([hidden])');
+      const g = await saved();
+      if (g.preset !== 'high' || g.bloom !== 'off' || g.show_fps !== true) throw new Error('graphics not saved: ' + JSON.stringify(g));
+      await page.screenshot({ path: SHOT('graphics', tag) });
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForSelector('.overlay[aria-label="Five Dice"]', { timeout: 15000 });
+      if (await presetAttr() !== 'high') throw new Error('preset did not survive reload');
+      await openGfx();
+      if (await page.inputValue('#gfx-preset') !== 'high') throw new Error('preset select after reload');
+      if (await page.inputValue('#gfx-bloom') !== 'off') throw new Error('override after reload');
+      // Choosing a preset clears overrides; back to Auto (Low) keeps the playthrough fast.
+      await page.selectOption('#gfx-preset', 'auto');
+      await page.waitForFunction(() => document.body.dataset.gfxPreset === 'low');
+      if (await page.inputValue('#gfx-bloom') !== 'preset') throw new Error('preset change did not clear override');
+      await page.locator('#gfx-fps').uncheck();
+      // Panel fits the viewport horizontally (no clipped controls).
+      const overflow = await page.evaluate(() => {
+        const o = document.querySelector('.overlay[aria-label="Settings"]');
+        return [...o.querySelectorAll('#gfx-section select, #gfx-section input')]
+          .some((el) => { const r = el.getBoundingClientRect(); return r.right > window.innerWidth + 1 || r.left < -1; });
+      });
+      if (overflow) throw new Error('graphics controls overflow the viewport');
+      await page.locator('.overlay .overlay-close').click();
+      await page.waitForSelector('.overlay[aria-label="Five Dice"]', { timeout: 10000 });
     });
 
     await step(`[${tag}] start Practice — Ember vs AI`, async () => {
@@ -246,7 +297,7 @@ async function playPass(browser, base, { tag, viewport, mobile }) {
 const { server, port } = await startServer();
 const browser = await chromium.launch({
   executablePath: '/usr/bin/google-chrome',
-  args: ['--no-sandbox', '--enable-unsafe-swiftshader'],
+  args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
 });
 try {
   const base = `http://127.0.0.1:${port}`;

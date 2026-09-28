@@ -94,7 +94,7 @@ async function boot() {
       const s = platform.settings;
       ui.applyTheme(getTheme(s.theme));
       renderer?.applyTheme(getTheme(s.theme));
-      renderer?.applyQuality(s.quality);
+      renderer?.setGraphics(s.graphics);
       renderer?.applyCameraPreset(s.cameraTilt);
       audio.applyVolumes();
       platform.track('settings-change', { key: 'any' });
@@ -126,6 +126,7 @@ async function boot() {
       renderer?.onGameEvent?.(e.event);
       if (e.event.type === 'score') audio.excite();
       if (e.event.type === 'roll') renderer?.updateState(session.state, { animate: true, rolled: e.event.rolled });
+      if (e.event.type === 'hold') renderer?.updateState(session.state, { animate: true });
     } else if (e.type === 'round') {
       renderer?.updateState(e.state, {});
       platform.track('start', { mode: e.def.mode });

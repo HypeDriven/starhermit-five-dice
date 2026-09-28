@@ -629,7 +629,7 @@ export function defaultSettings() {
   return {
     v: 1,
     theme: 'hearth',
-    quality: 'medium',
+    graphics: {},             // js/gfx.js saved model: { preset: 'auto'|tier, render_scale, adaptive, show_fps, <category> }
     muted: false,
     volMusic: 0.5, volEffects: 0.8, volAmbience: 0.4, volVoice: 0.8,
     captions: false,

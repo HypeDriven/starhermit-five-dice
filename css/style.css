@@ -212,6 +212,20 @@ body.high-contrast .die-btn.held { outline: 3px dashed var(--select); outline-of
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
   border-radius: 0.4rem; padding: 0.35rem 0.5rem; font: inherit; min-height: 44px;
 }
+/* Graphics section: slider value stays on the slider's line at phone widths. */
+.settings-grid .range-wrap { display: flex; align-items: center; gap: 0.5rem; flex: 1; max-width: 15rem; justify-content: flex-end; }
+.settings-grid .range-wrap input[type="range"] { min-width: 0; }
+.range-value { min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
+.gfx-section .settings-grid label { flex-wrap: wrap; }
+.gfx-section .settings-grid select { max-width: 100%; margin-left: auto; }
+.gfx-summary { margin-top: 0.5rem; overflow-wrap: anywhere; }
+.gfx-note { color: var(--accent); }
+/* Frame-rate readout: bottom-left, never over HUD controls or input. */
+.fps-meter {
+  position: fixed; left: calc(0.4rem + var(--sal)); bottom: calc(0.4rem + var(--sab)); z-index: 50;
+  pointer-events: none; font: 12px/1.2 ui-monospace, monospace; padding: 0.15rem 0.4rem;
+  background: rgba(0, 0, 0, 0.55); color: #e8e0d0; border-radius: 0.3rem;
+}
 
 .results-table { width: 100%; border-collapse: collapse; margin: 0.5rem 0; }
 .results-table th, .results-table td { padding: 0.3rem 0.45rem; text-align: left; border-bottom: 1px solid var(--line); }
