@@ -318,3 +318,7 @@ Conventions follow https://wiki.starhermit.com/ (manifest, same-origin `/api/v1`
 - Key-binding remap UI on top of the existing `settings.bindings` override.
 - Platform achievements (needs a Jint server script, which `server.js` is not) and hosted invitations/pass-and-play across devices.
 - Machine states `title`, `mode-select`, `reconnecting` driven by the UI so the state machine mirrors every screen.
+
+## Browser interference
+
+`browser-guard.js` (loaded from `index.html`) suppresses browser UI that gets in the way of play: the right-click context menu, the iOS long-press callout, copy / cut / paste, and page text selection. Text fields (inputs, textareas, selects, contenteditable) keep normal selection, context menu and clipboard behaviour.
