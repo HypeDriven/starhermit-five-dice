@@ -4,6 +4,7 @@
 // authoritative-clock ticker, and one-input acknowledgment feedback.
 
 import { Platform } from './platform.js';
+import { platformStrings } from './platform-i18n.js';
 import { Session } from './session.js';
 import { AudioEngine } from './audio.js';
 import { UI } from './ui.js';
@@ -17,10 +18,6 @@ async function boot() {
   platform.verifyProgress();
   if (platform.hosted) {
     platform.reconcileProgress().catch(() => {});
-  }
-  if (platform.devApi) {
-    platform.startPresence();
-    platform.activityStart();
   }
 
   const audio = new AudioEngine(platform.settings, (text) => ui?.toast(`♪ ${text}`));
@@ -97,7 +94,6 @@ async function boot() {
       renderer?.setGraphics(s.graphics);
       renderer?.applyCameraPreset(s.cameraTilt);
       audio.applyVolumes();
-      platform.track('settings-change', { key: 'any' });
     },
   };
 
@@ -113,6 +109,11 @@ async function boot() {
   ui.applyTheme(getTheme(platform.settings.theme));
   // Account nickname / cloud sync arrived after boot: refresh the title status.
   platform.onStatusChange = () => { if (!ui.hudVisible) ui.setStatus(platform.statusLine()); };
+  // Launch-token renewal refused: keep playing locally, re-offer sign-in on the title.
+  platform.onAuthChange = () => {
+    ui.toast(platformStrings().signedOut);
+    if (ui.overlayKind === 'Five Dice') ui.showTitle();
+  };
 
   // --- session event routing ---------------------------------------------------
 
@@ -129,7 +130,6 @@ async function boot() {
       if (e.event.type === 'hold') renderer?.updateState(session.state, { animate: true });
     } else if (e.type === 'round') {
       renderer?.updateState(e.state, {});
-      platform.track('start', { mode: e.def.mode });
       startClockTicker();
     } else if (e.type === 'machine') {
       if (e.to === 'countdown') runCountdown();
@@ -139,7 +139,6 @@ async function boot() {
       }
       if (e.to === 'resolving') {
         stopClockTicker();
-        platform.track('round-end', { mode: session.def?.mode });
         setTimeout(() => {
           session.transition('results', session.state.terminalReason);
           audio.result(session.outcome().won);
@@ -285,7 +284,6 @@ async function boot() {
   window.addEventListener('pagehide', () => {
     session.saveSnapshot();
     platform.pushCloudSave(); // flush the debounced cloud save
-    platform.activityEnd();
   });
   window.addEventListener('resize', () => renderer?.resize());
   window.addEventListener('orientationchange', () => setTimeout(() => renderer?.resize(), 120));

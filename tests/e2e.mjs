@@ -10,10 +10,9 @@
  *   through its visible toggle).
  *
  * The game is local-first; this test embeds a minimal static server that
- * also stubs the same-origin /api/v1 routes (time/save/presence/activity/
- * events/leaderboard read) so the client boots in "hosted" mode without the
- * authoritative server. Practice tables are unranked, so no score submission
- * path is exercised. Page state (window.__fivedice) is read only for
+ * also mocks the same-origin StarHermit /api/v1 routes for a final hosted
+ * pass (launch token, nickname, settings, invite link, cloud save). The
+ * standalone passes must make no /api request at all. Page state (window.__fivedice) is read only for
  * synchronization; every action goes through the visible UI.
  *
  * Regression notes (both fixed in game code; any page error fails the run):
@@ -59,21 +58,29 @@ const MIME = {
   '.ts': 'application/javascript; charset=utf-8',
 };
 
+const apiLog = [];
+
 function startServer() {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
     const p = url.pathname;
-    // Minimal same-origin API stubs so the client boots hosted without 404 noise.
+    // Same-origin StarHermit platform mocks for the hosted pass (standalone
+    // passes must never reach them).
     if (p.startsWith('/api/')) {
-      const json = (body) => {
-        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+      apiLog.push(`${req.method} ${p}`);
+      const json = (body, status = 200) => {
+        res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify(body));
       };
-      if (p === '/api/v1/time') return json({ now: Date.now() });
-      if (p === '/api/v1/save' && req.method === 'GET') return json({ doc: null });
-      if (p === '/api/v1/save') return json({ stored: 'ok' });
-      if (p === '/api/v1/leaderboard') return json({ entries: [], validated: true });
-      return json({ ok: true });
+      const dp = decodeURIComponent(p);
+      if (dp.endsWith('/profile')) return json({ username: 'raw_name', nickname: 'Juniper' });
+      if (dp.endsWith('/settings') && req.method === 'GET') return json({ settings: { volMusic: 0.25 } });
+      if (dp.endsWith('/settings')) return json({ settings: {} });
+      if (dp.endsWith('/controls')) return json({ actions: [] });
+      if (dp.endsWith('/cloud-saves/game:five-dice-test/info')) return json({ exists: false });
+      if (dp.endsWith('/cloud-saves/game:five-dice-test')) return json({});
+      if (dp.endsWith('/leaderboards')) return json([]);
+      return json({ error: 'not found' }, 404);
     }
     const rel = p === '/' ? 'index.html' : decodeURIComponent(p.replace(/^\//, ''));
     const filePath = path.join(ROOT, rel);
@@ -288,7 +295,46 @@ async function playPass(browser, base, { tag, viewport, mobile }) {
       await page.screenshot({ path: SHOT('title-return', tag) });
     });
 
+    if (apiLog.length) throw new Error(`${tag} standalone pass made platform calls: ${apiLog.join(', ')}`);
     checkErrors();
+  } finally {
+    await context.close();
+  }
+}
+
+// Hosted pass: launch-token fragment → nickname status, synced settings,
+// invite link copied through the visible title-menu entry, cloud save PUT.
+async function hostedPass(browser, base) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  page.on('console', (m) => {
+    if (['error', 'warning'].includes(m.type()) && !browserNoise.test(m.text())) errors.push(`console ${m.type()}: ${m.text()}`);
+  });
+  await page.addInitScript(() => {
+    window.__copied = [];
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t) => { window.__copied.push(t); } } });
+  });
+  const b64u = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const token = 'h.' + b64u({ sub: 'u-1234567', game_scope: 'five-dice-test', exp: Math.floor(Date.now() / 1000) + 3600 }) + '.s';
+  try {
+    await step('[hosted] launch token → nickname, synced settings, invite link', async () => {
+      await page.goto(`${base}/#game_token=${token}`, { waitUntil: 'load' });
+      await page.waitForSelector('.overlay[aria-label="Five Dice"]', { timeout: 15000 });
+      if (new URL(page.url()).hash) throw new Error('launch token left in the URL');
+      await page.waitForFunction(() => /Signed in as Juniper/.test(document.querySelector('#session-status')?.textContent || ''), null, { timeout: 5000 });
+      const vol = await page.evaluate(() => JSON.parse(localStorage.getItem('fivedice:settings')).volMusic);
+      if (vol !== 0.25) throw new Error('platform settings not applied: ' + vol);
+      if (await page.locator('.overlay .menu-list button', { hasText: 'Sign in with StarHermit' }).count()) throw new Error('sign-in shown while signed in');
+      await page.locator('.overlay .menu-list button', { hasText: 'Invite a friend' }).click();
+      await page.waitForFunction(() => /Invite link copied/.test(document.querySelector('#toast')?.textContent || ''));
+      const copied = await page.evaluate(() => window.__copied[0]);
+      if (!/\/game-invite\/u-1234567\/five-dice-test$/.test(copied)) throw new Error('bad invite link ' + copied);
+      if (!apiLog.some((l) => l === 'PUT /api/v1/me/cloud-saves/game%3Afive-dice-test')) throw new Error('empty cloud slot was not seeded: ' + apiLog.join(', '));
+      await page.screenshot({ path: SHOT('title', 'hosted') });
+    });
+    if (errors.length) throw new Error(`hosted pass page errors:\n${errors.join('\n')}`);
   } finally {
     await context.close();
   }
@@ -304,6 +350,7 @@ try {
   console.log(`serving ${ROOT} on ${base}`);
   await playPass(browser, base, { tag: 'desktop', viewport: { width: 1280, height: 800 }, mobile: false });
   await playPass(browser, base, { tag: 'mobile', viewport: { width: 390, height: 844 }, mobile: true });
+  await hostedPass(browser, base);
   console.log('\nE2E PASS — full Five Dice table completed on desktop and mobile, no unexpected page errors');
 } finally {
   await browser.close();

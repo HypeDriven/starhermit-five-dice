@@ -13,7 +13,8 @@ import {
   THEMES, LESSONS, JOURNEY, TRAILS, CHALLENGES, PRACTICE_DIFFICULTIES,
   practiceDef, dailyForDate, CONTENT_VERSION,
 } from './content.js';
-import { ACHIEVEMENTS } from './platform.js';
+import { ACHIEVEMENTS, DEFAULT_KEYS } from './platform.js';
+import { platformStrings } from './platform-i18n.js';
 import {
   PRESETS as GFX_PRESETS, CATEGORIES as GFX_CATEGORIES, resolve as gfxResolve,
   presetTier as gfxPresetTier, choosePreset as gfxChoosePreset, describe as gfxDescribe,
@@ -22,10 +23,6 @@ import { gfxStrings } from './gfx-i18n.js';
 
 const PIP_GLYPHS = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
 
-const DEFAULT_BINDINGS = {
-  hold0: 'Digit1', hold1: 'Digit2', hold2: 'Digit3', hold3: 'Digit4', hold4: 'Digit5',
-  roll: 'KeyR', hint: 'KeyH', undo: 'KeyU', pause: 'Escape', camera: 'KeyC',
-};
 const GAMEPAD_DEFAULTS = {
   confirm: 0, cancel: 1, roll: 2, hint: 3, prev: 14, next: 15, pause: 9,
 };
@@ -115,8 +112,16 @@ export class UI {
     root.setProperty('--page', theme.page);
   }
 
+  // Effective keyboard bindings ({ action: [codes] }): platform overrides of
+  // DEFAULT_KEYS (control.* in starhermit.txt) when signed in.
   bindings() {
-    return { ...DEFAULT_BINDINGS, ...(this.settings.bindings || {}) };
+    return { ...DEFAULT_KEYS, ...(this.platform.keyBindings || {}) };
+  }
+
+  actionForCode(code) {
+    const b = this.bindings();
+    for (const [action, codes] of Object.entries(b)) if (codes.includes(code)) return action;
+    return null;
   }
 
   // --- top bar -----------------------------------------------------------------
@@ -227,6 +232,9 @@ export class UI {
       add('Learn', 'interactive lessons, one rule at a time', () => this.showLessons());
       add('Challenges', 'constrained tables for sharp players', () => this.showChallenges());
       add('Profile & Scores', 'achievements, leaderboards, stats', () => this.showProfile());
+      const ps = platformStrings();
+      if (p.canSignIn) add(ps.signIn, ps.signInSub, () => p.signIn());
+      if (p.hosted) add(ps.invite, ps.inviteSub, () => this.copyInvite());
       add('Help & Rules', 'how a table works', () => this.showHelp());
       add('Settings', 'audio, display, graphics, controls', () => this.showSettings({ onClose: () => this.showTitle() }));
       c.append(list);
@@ -235,6 +243,18 @@ export class UI {
     // Lodge key art behind the title card (CSS background: a missing file
     // simply leaves the plain dimmed backdrop).
     title.parentElement?.classList.add('title-backdrop');
+  }
+
+  async copyInvite() {
+    const link = this.platform.inviteLink();
+    if (!link) return;
+    const ps = platformStrings();
+    try {
+      await navigator.clipboard.writeText(link);
+      this.toast(ps.inviteCopied);
+    } catch {
+      this.toast(ps.inviteFailed);
+    }
   }
 
   showPracticeSetup() {
@@ -315,7 +335,8 @@ export class UI {
 
   showHelp() {
     const b = this.bindings();
-    const key = (code) => code.replace('Key', '').replace('Digit', '');
+    const name = (code) => ({ Escape: 'Esc', ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', NumpadEnter: 'Enter' }[code] || code.replace(/^(Key|Digit|Numpad)/, ''));
+    const key = (codes) => [...new Set(codes.map(name))].join('/');
     this.openOverlay('Help & Rules', (c) => {
       c.append(this.h('h3', { text: 'How a table works' }));
       c.append(this.h('p', { text: 'Roll five dice. You may reroll any unheld dice twice more (three rolls total). Tap a die to hold it between rolls. Then choose exactly one open category on the card to score. When every category on every card is filled, the highest grand total wins.' }));
@@ -327,7 +348,7 @@ export class UI {
       c.append(ul);
       c.append(this.h('p', { text: `Upper rows (Kindling…Peaks) totaling ${UPPER_BONUS_THRESHOLD}+ earn a ${UPPER_BONUS}-point lodge bonus.` }));
       c.append(this.h('h3', { text: 'Controls' }));
-      c.append(this.h('p', { text: `Roll: ${key(b.roll)} or the Roll button. Hold die: 1–5 keys or tap. Hint: ${key(b.hint)}. Undo: ${key(b.undo)} where allowed. Pause: Esc. Camera: ${key(b.camera)}. Arrow keys move focus; Enter confirms. Gamepad: D-pad moves focus, A holds, X rolls, Start pauses.` }));
+      c.append(this.h('p', { text: `Roll: ${key(b.roll)} or the Roll button. Hold die: ${[0, 1, 2, 3, 4].map((i) => key(b[`hold${i}`])).join(', ')} or tap. Hint: ${key(b.hint)}. Undo: ${key(b.undo)} where allowed. Pause: ${key(b.pause)}. Camera: ${key(b.camera)}. ${key(b.focusPrev)}/${key(b.focusNext)} move focus; ${key(b.confirm)} confirms. Gamepad: D-pad moves focus, A holds, X rolls, Start pauses.` }));
       c.append(this.h('p', { class: 'muted', text: 'Every table is seeded and replayable; the same seed and choices always produce the same dice.' }));
     });
   }
@@ -390,18 +411,6 @@ export class UI {
       toggle('Hold to confirm scoring', 'holdToConfirm');
       toggle('Timing assistance', 'timingAssist');
       toggle('Haptics', 'haptics');
-
-      section('Privacy');
-      const consent = this.h('input', {
-        type: 'checkbox', ...(this.platform.consent.telemetry ? { checked: true } : {}),
-        onchange: (e) => {
-          this.platform.consent.telemetry = e.target.checked;
-          s.telemetryConsent = e.target.checked;
-          save();
-          this.toast(e.target.checked ? 'Anonymous funnel telemetry on' : 'Telemetry off');
-        },
-      });
-      grid.append(this.h('label', {}, 'Anonymous usage telemetry', consent));
 
       c.append(this.h('div', { class: 'btn-row', style: 'margin-top:0.8rem' },
         this.h('button', {
@@ -917,9 +926,8 @@ export class UI {
         if (ev.code === 'Escape') document.activeElement.blur();
         return;
       }
-      const b = this.bindings();
-      const code = ev.code;
-      if (code === b.pause) {
+      const action = this.actionForCode(ev.code);
+      if (action === 'pause') {
         ev.preventDefault();
         if (this.overlay && this.overlayKind === 'Paused') this.togglePause(); // close + resume
         else if (this.overlay && this.overlayKind !== 'Results') this.closeOverlay();
@@ -930,17 +938,16 @@ export class UI {
         // Arrow-key navigation stays native (tab order) inside overlays.
         return;
       }
-      for (let i = 0; i < DICE_COUNT; i++) {
-        if (code === b[`hold${i}`]) { ev.preventDefault(); this.env.tryHold(i); return; }
-      }
-      if (code === b.roll) { ev.preventDefault(); this.env.tryRoll(); }
-      else if (code === b.hint) { ev.preventDefault(); this.env.tryHint(); }
-      else if (code === b.undo) { ev.preventDefault(); this.env.tryUndo(); }
-      else if (code === b.camera) { ev.preventDefault(); this.env.cycleCamera?.(); }
-      else if (code === 'ArrowLeft' || code === 'ArrowRight') {
+      const hold = /^hold(\d)$/.exec(action || '');
+      if (hold && Number(hold[1]) < DICE_COUNT) { ev.preventDefault(); this.env.tryHold(Number(hold[1])); return; }
+      if (action === 'roll') { ev.preventDefault(); this.env.tryRoll(); }
+      else if (action === 'hint') { ev.preventDefault(); this.env.tryHint(); }
+      else if (action === 'undo') { ev.preventDefault(); this.env.tryUndo(); }
+      else if (action === 'camera') { ev.preventDefault(); this.env.cycleCamera?.(); }
+      else if (action === 'focusPrev' || action === 'focusNext') {
         ev.preventDefault();
-        this.moveDieFocus(code === 'ArrowRight' ? 1 : -1);
-      } else if (code === 'Enter' || code === 'Space') {
+        this.moveDieFocus(action === 'focusNext' ? 1 : -1);
+      } else if (action === 'confirm') {
         // Confirm focused die hold if focus is on a die button.
         const die = document.activeElement?.dataset?.die;
         if (die != null) { ev.preventDefault(); this.env.tryHold(Number(die)); }
