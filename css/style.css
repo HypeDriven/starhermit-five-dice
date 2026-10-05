@@ -43,7 +43,10 @@ button:focus-visible, [tabindex]:focus-visible, a:focus-visible {
   outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 0.3rem;
 }
 
-#app { display: flex; flex-direction: column; height: 100dvh; }
+#app { display: flex; flex-direction: column; height: calc(100dvh / var(--ui-scale, 1)); }
+/* Large screens: the app, overlays, toast and FPS meter zoom by --ui-scale (ui-scale.js:
+   exactly 1 up to a 1600x1000 viewport); vw/vh lengths inside them are divided by it. */
+#app, #overlay-root, .toast, .fps-meter, .skip-link { zoom: var(--ui-scale, 1); }
 
 /* --- top bar ---------------------------------------------------------------- */
 #topbar {
@@ -162,7 +165,7 @@ body.high-contrast .die-btn.held { outline: 3px dashed var(--select); outline-of
 }
 .countdown {
   position: absolute; inset: 0; display: grid; place-items: center; z-index: 4;
-  font-size: clamp(3rem, 12vw, 6rem); font-weight: 800; color: var(--accent);
+  font-size: clamp(3rem, calc(12vw / var(--ui-scale, 1)), 6rem); font-weight: 800; color: var(--accent);
   text-shadow: 0 4px 24px rgba(0, 0, 0, 0.7); pointer-events: none;
 }
 
@@ -182,8 +185,8 @@ body.high-contrast .die-btn.held { outline: 3px dashed var(--select); outline-of
 }
 .overlay {
   background: var(--panel); color: var(--text); border: 1px solid var(--line);
-  border-radius: 0.9rem; padding: 1.1rem 1.3rem; width: min(94vw, 40rem);
-  max-height: 88dvh; overflow-y: auto; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  border-radius: 0.9rem; padding: 1.1rem 1.3rem; width: min(calc(94vw / var(--ui-scale, 1)), 40rem);
+  max-height: calc(88dvh / var(--ui-scale, 1)); overflow-y: auto; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
 }
 .overlay h2 { color: var(--accent); margin-bottom: 0.6rem; font-size: 1.25rem; }
 .overlay h3 { color: var(--accent); margin: 0.8rem 0 0.35rem; font-size: 1rem; }
@@ -245,7 +248,7 @@ body.high-contrast .die-btn.held { outline: 3px dashed var(--select); outline-of
 .toast {
   position: fixed; left: 50%; bottom: calc(7rem + var(--sab)); transform: translateX(-50%);
   background: var(--panel); border: 1px solid var(--line); color: var(--text);
-  padding: 0.5rem 1rem; border-radius: 0.6rem; z-index: 80; display: none; max-width: 90vw;
+  padding: 0.5rem 1rem; border-radius: 0.6rem; z-index: 80; display: none; max-width: calc(90vw / var(--ui-scale, 1));
 }
 .toast.show { display: block; }
 

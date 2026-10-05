@@ -952,7 +952,8 @@ export class Renderer {
     const w = Math.max(1, el.clientWidth);
     const h = Math.max(1, el.clientHeight);
     const q = this.q || { maxRatio: 1.5, scale: 1 };
-    const ratio = Math.min(window.devicePixelRatio || 1, q.maxRatio) * q.scale * this.adaptiveScale;
+    // × UIScale: the canvas sits inside the CSS-zoomed #app on large screens.
+    const ratio = Math.min(window.devicePixelRatio || 1, q.maxRatio) * ((window.UIScale && UIScale.value) || 1) * q.scale * this.adaptiveScale;
     if (force || w !== this.size[0] || h !== this.size[1] || ratio !== this.pixelRatio) {
       this.size = [w, h];
       this.pixelRatio = ratio;

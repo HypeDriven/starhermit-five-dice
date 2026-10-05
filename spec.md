@@ -166,6 +166,8 @@ Title, Practice setup, Learn, Journey, Challenges, Profile & Scores, Help & Rule
 
 **Landscape mobile.** The dice tray becomes a vertical column on the right edge; the action tray sits along the bottom.
 
+**Large screens (>1600×1000).** `ui-scale.js` sets `--ui-scale` (min(width/1600, height/1000), capped at 2.5; 2560×1440 → 1.44, 3840×2160 → 2.16) and `#app` (top bar, rails, stage, trays), the overlay root, the toast and the FPS meter are CSS-`zoom`ed by it with their vw/dvh lengths divided by it, so the desktop layout grows proportionally; the 3D table multiplies its pixel ratio by it so it stays sharp.
+
 **Safe areas.** `env(safe-area-inset-*)` pads the top bar, drawer toggles, trays, lesson banner and toast; `viewport-fit=cover` is set. Overlays are `min(94vw, 40rem)` wide, at most `88dvh` tall and scroll internally; the results ranking table shrinks to 0.85 em with tighter cells under 480 px so all six columns fit.
 
 **Must never be cut off.** Roll button, all five die buttons, the drawer toggles, the status line's actor/rolls text, the results grand total row, and the Resume button of the Paused overlay.
