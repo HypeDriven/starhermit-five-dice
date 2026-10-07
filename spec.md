@@ -32,6 +32,7 @@ Present tense: this document describes what the shipped game does today. Anythin
 | `js/gfx-i18n.js` | Localized strings for the Graphics settings section (9 locales) |
 | `js/audio.js` | WebAudio engine: four buses, authored Opus one-shots with synth fallbacks, hearth ambience loop, generative fireside music, captions |
 | `js/ui.js` | DOM shell: title/menus/help/settings/profile/pause/results overlays, HUD (scorecard, dice tray, action tray, table rail), keyboard + gamepad, live announcements |
+| `score-script.js` | StarHermit platform script (`server=`): range-checks a finished table's grand total sent through `StarHermit.submitScores` and posts it to the `high-score` leaderboard (canonical copy in the games repo's `tools/score-script.js`) |
 | `server.js` | Local static host; also keeps legacy `/api/v1` dev routes (time, save, presence, activity, events, leaderboard read/submit with replay validation) that the client no longer calls |
 | `sfx/` | 22 Opus clips; `manifest.txt` (canonical event binding), `manifest.json` (generator input), `manifest.md` (generator output) |
 | `assets/` | `key-art.webp` (title backdrop), `results-win.webp`, `results-lose.webp` |
@@ -41,7 +42,7 @@ Present tense: this document describes what the shipped game does today. Anythin
 | `tests/run.js`, `tests/e2e.mjs` | 40 unit/property/golden/server/graphics-model tests; Playwright playthrough at desktop and mobile viewports |
 | `tests/smoke.html`, `tests/smoke-driver.js` | Manual in-browser smoke driver (not part of `npm test`) |
 | `data/` | Runtime JSON stores written by `server.js` (`leaderboard.json`, `saves.json`); git-ignored, never served |
-| `starhermit.txt` | `name=Five Dice`, `launch=index.html`, `owner=…`, `server=server.js`, `cover=coverart.png` |
+| `starhermit.txt` | `name=Five Dice`, `launch=index.html`, `owner=…`, `server=score-script.js`, `cover=coverart.png` |
 
 ## 2. Vision and design pillars
 
@@ -233,7 +234,7 @@ Lights: warm key directional light `#ffcf98` (intensity 1.7, the only shadow cas
 
 ## 10. Localization
 
-The shipped build is **English only**, except the Settings → Graphics section (`js/gfx-i18n.js`) and the StarHermit account entries — sign-in, invite, their toasts and the sign-out notice (`js/platform-i18n.js`) — which are localized into all nine target locales from `navigator.language` (exact match, then language family, then en-US). `index.html` declares `lang="en"`; UI strings are literals in `js/ui.js` (menus, settings, help, results, invalid-action text), `js/content.js` (category, lesson, trail, stage and challenge names and blurbs), `js/rules.js` (category names, hint reasons) and `js/audio.js` (captions). There is no language selector and no locale detection. Layout already tolerates ~30 % expansion: menu rows wrap their sub-labels, scorecard names use `overflow-wrap: anywhere`, overlays scroll. Shipping en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR and it-IT is listed under design intent.
+The shipped build is **English only**, except the Settings → Graphics section (`js/gfx-i18n.js`) and the StarHermit account entries — sign-in, invite, their toasts, the sign-out notice and the Results leaderboard line (`js/platform-i18n.js`) — which are localized into all nine target locales from `navigator.language` (exact match, then language family, then en-US). `index.html` declares `lang="en"`; UI strings are literals in `js/ui.js` (menus, settings, help, results, invalid-action text), `js/content.js` (category, lesson, trail, stage and challenge names and blurbs), `js/rules.js` (category names, hint reasons) and `js/audio.js` (captions). There is no language selector and no locale detection. Layout already tolerates ~30 % expansion: menu rows wrap their sub-labels, scorecard names use `overflow-wrap: anywhere`, overlays scroll. Shipping en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR and it-IT is listed under design intent.
 
 ## 11. Accessibility
 
@@ -250,7 +251,7 @@ Conventions follow https://wiki.starhermit.com/. `js/platform.js` is a thin adap
 
 | Feature | Status |
 |---|---|
-| Manifest `starhermit.txt` | `name`, `launch=index.html`, `owner`, `server=server.js`, `cover`, and one `control.<action>` line per keyboard action |
+| Manifest `starhermit.txt` | `name`, `launch=index.html`, `owner`, `server=score-script.js`, `cover`, and one `control.<action>` line per keyboard action |
 | Launch token | The SDK reads `#game_token=<jwt>[&session_id=]` (library launch) or `#access_token=<jwt>` (sign-in return), strips it from the address bar, takes `sub` / `game_scope` (slug never hard-coded), sends `Authorization: Bearer` on every same-origin `/api/v1` call and renews the token before expiry. Never stored. If renewal is refused the game drops to local play, toasts that progress keeps saving on this device, and the title menu offers sign-in again where available |
 | Hosted mode | Activates iff a launch token was read. Without one the game makes no network request at all |
 | Sign-in | On `<slug>.starhermit.com` without a token the title menu shows **Sign in with StarHermit** (SDK redirect); hidden when signed in and when running locally |
@@ -259,9 +260,9 @@ Conventions follow https://wiki.starhermit.com/. `js/platform.js` is a thin adap
 | Cloud save | Progress document (`v`, `rev`, journey, challenges, achievements, totals, streakDays, bestDaily) with a local checksum; localStorage is the offline cache. Hosted: slot `game:<slug>` (`/api/v1/me/cloud-saves/game:<slug>`): on boot the slot info is checked, the higher `rev` wins (the losing local copy is kept as `progress:pre-reconcile`; an empty slot is seeded from local progress), saves debounce ~2 s and flush on `pagehide` / hidden; sync status shown |
 | Settings sync | Hosted: theme, graphics, mute, the four volumes, captions, reduced motion, high contrast, palette, larger text, left-handed, hold-to-confirm, haptics, timing assistance and camera are patched into the settings KV (same key names) on change; at boot the platform values are applied over local defaults |
 | Controls | Keyboard input is routed by `KeyboardEvent.code` through `StarHermit.loadBindings(DEFAULT_KEYS)`: `hold0`–`hold4`, `roll`, `hint`, `undo`, `pause`, `camera`, `focusPrev`, `focusNext`, `confirm`. Help & Rules lists the effective keys |
-| Leaderboards | Read-only. Hosted Daily/Challenge tabs list the platform board whose key matches (else the first board) with nicknames resolved per entry; with no board, or for Journey wins, the local list shows. Clients never submit scores |
+| Leaderboards | When signed in, every finished table except lessons and forfeits posts its grand total through `StarHermit.submitScores` (a practice session whose `score-script.js` posts it to the `high-score` board: integer, higher is better, 0–10,000), and the Results overlay shows "Leaderboard rank: #N" (or posted / not posted). Hosted Daily/Challenge tabs list the platform board whose key matches (else the first board, i.e. `high-score`) with nicknames resolved per entry; with no board, or for Journey wins, the local list shows. Standalone play posts nothing |
 | Achievements | Six static keys (`first_table`, `lodge_keeper`, `avalanche_caller`, `weekly_regular`, `mastery_stage`, `century_nights`) granted idempotently in the local progress document (part of the cloud-saved doc) and toasted; `server.js` is not a platform game script, so there are no platform unlocks |
-| Server file | `server.js`: local static host for development (rate limit, payload cap, structured errors, plus legacy save/leaderboard/presence routes the client no longer calls) |
+| Server file | `score-script.js` is the platform script; `server.js`: local static host for development (rate limit, payload cap, structured errors, plus legacy save/leaderboard/presence routes the client no longer calls) |
 | Not used | Friends picker, platform invites, matchmaking, sessions, chat, voice, realtime rooms, replays — the game is single-player against local AI and has no platform game script |
 
 ## 13. Technical architecture
@@ -313,7 +314,7 @@ Conventions follow https://wiki.starhermit.com/. `js/platform.js` is a thin adap
 - Journey stage cards show "n. Mastery" for mastery stages and just "n." otherwise; trail names are headings, stage names appear only in the aria-label and the status line.
 - In portrait phones the outer dice can sit outside the 3D camera frustum; the DOM dice tray is authoritative.
 - `server.js` serves `tests/` and dotfiles (only `data/` is refused); `tests/smoke.html` depends on this and is not part of `npm test`.
-- On-platform global boards appear only when the platform lists a `leaderboardId` for the game; Journey wins remain local-only.
+- On-platform there is one global `high-score` board for all modes; Journey wins remain local-only in the leaderboard screen.
 - The Blizzard Clock is enforced when a command or the once-a-second heartbeat arrives, so expiry can register up to one second late.
 
 ## Design intent not yet implemented

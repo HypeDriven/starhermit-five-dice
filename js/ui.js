@@ -817,6 +817,18 @@ export class UI {
       });
       c.append(table);
 
+      if (record.mode !== 'learn' && record.reason !== 'gave-up' && this.platform.hosted) {
+        // StarHermit high-score board: the finished card's grand total.
+        const ps = platformStrings();
+        const lb = this.h('p', { class: 'muted lb-line', text: ps.lbPosting });
+        lb.setAttribute('aria-live', 'polite');
+        c.append(lb);
+        this.platform.submitScore(b.grand).then((r) => {
+          lb.textContent = !r.posted ? ps.lbNotPosted
+            : r.rank ? ps.lbRank.replace('{rank}', r.rank) : ps.lbPosted;
+        });
+      }
+
       const newly = this.platform.lastAchievements || [];
       if (newly.length) {
         c.append(this.h('h3', { text: 'Achievements unlocked' }));

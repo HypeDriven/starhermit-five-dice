@@ -332,6 +332,21 @@ export class Platform {
     return newly;
   }
 
+  // Post a finished table's grand total to the high-score board (score-script.js);
+  // resolves { posted, rank } — the player's rank on that board, or null.
+  async submitScore(total) {
+    const sh = this.sh;
+    if (!sh || !this.hosted || typeof sh.submitScores !== 'function') return { posted: false, rank: null };
+    let keys;
+    try { keys = await sh.submitScores({ 'high-score': total }); } catch (e) { return { posted: false, rank: null }; }
+    if (!keys || !keys.includes('high-score')) return { posted: false, rank: null };
+    try {
+      const r = await sh.leaderboard('high-score', { pageSize: 100 });
+      const me = ((r && r.items) || []).find((i) => i.userId === sh.userId);
+      return { posted: true, rank: me ? me.rank : null };
+    } catch (e) { return { posted: true, rank: null }; }
+  }
+
   async leaderboard(board, { friends = false } = {}) {
     // Local leaderboard always available; hosted adds read-only global boards.
     const local = this.results
@@ -340,8 +355,8 @@ export class Platform {
       .slice(0, 50)
       .map((r) => ({ name: this.profile.name, me: true, ...publicEntry(r) }));
     if (this.hosted) {
-      // Clients can never submit scores; boards are read-only and only exist
-      // when the game server reports them. Journey wins have no platform board.
+      // Finished tables post to the platform `high-score` board (submitScore);
+      // every hosted board reads it. Journey wins have no separate platform board.
       if (board === 'journey') return { source: 'local', entries: local, label: 'casual (local)' };
       try {
         const boards = await this.sh.leaderboards();
