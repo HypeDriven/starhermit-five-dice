@@ -1005,7 +1005,7 @@ export class Renderer {
     }
     if (this.composer) {
       try {
-        this.composer.render(dt / 1000);
+        (globalThis.GameOptions ? globalThis.GameOptions.draw(this.composer.renderer, () => this.composer.render(dt / 1000)) : this.composer.render(dt / 1000));
         return;
       } catch {
         this.postFailed = true;
@@ -1013,7 +1013,7 @@ export class Renderer {
         this.postKey = null;
       }
     }
-    this.gl.render(this.scene, this.camera);
+    (globalThis.GameOptions ? globalThis.GameOptions.draw(this.gl, () => this.gl.render(this.scene, this.camera)) : this.gl.render(this.scene, this.camera));
   }
 
   animateAmbient(now, dt) {
