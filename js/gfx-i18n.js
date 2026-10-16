@@ -1,6 +1,6 @@
-// Five Dice — localized strings for the Graphics settings panel. The game has
-// no general i18n system; only this panel is localized, picking the locale
-// from navigator.language (exact match, then language family, then en-US).
+// Five Dice — localized strings for the Graphics settings panel (the rest of
+// the UI is in js/strings.js), picking the locale
+// from the game language (js/i18n.js; exact match, then language family, then en-US).
 
 const EN = {
   title: 'Graphics',
@@ -114,6 +114,11 @@ STRINGS['fr-CA'] = {
 
 export const GFX_LOCALES = Object.keys(STRINGS);
 
+/** The game's Language setting (js/i18n.js), else the browser language. */
+export function gameLocale() {
+  return globalThis.FDI18N?.lang || (typeof navigator !== 'undefined' ? navigator.language : 'en-US');
+}
+
 const FAMILY = { en: 'en-US', es: 'es-419', de: 'de-DE', fr: 'fr-FR', pt: 'pt-BR', it: 'it-IT' };
 
 export function pickLocale(lang) {
@@ -124,7 +129,7 @@ export function pickLocale(lang) {
 }
 
 /** Translator for the Graphics panel: t(key, {tier}) with en-US fallback. */
-export function gfxStrings(lang = (typeof navigator !== 'undefined' ? navigator.language : 'en-US')) {
+export function gfxStrings(lang = gameLocale()) {
   const table = STRINGS[pickLocale(lang)];
   return (key, vars) => {
     let s = table[key] ?? EN[key] ?? key;

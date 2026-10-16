@@ -289,7 +289,7 @@ export function previewScores(state) {
 export function getHint(state) {
   const legal = listLegalActions(state);
   if (state.status !== 'active') return null;
-  if (!state.hasRolled) return { action: 'roll', reason: 'Start your turn by rolling all five dice.' };
+  if (!state.hasRolled) return { action: 'roll', reasonKey: 'Start your turn by rolling all five dice.', reason: 'Start your turn by rolling all five dice.' };
   let best = null;
   for (const id of legal.scoreable) {
     const pts = scoreCategory(state.dice, id);
@@ -297,14 +297,19 @@ export function getHint(state) {
   }
   if (legal.canRoll && (!best || best.points === 0)) {
     const holds = suggestHolds(state);
-    return { action: 'roll', hold: holds, reason: 'Nothing scores yet — keep the promising dice and reroll.' };
+    return { action: 'roll', hold: holds, reasonKey: 'Nothing scores yet — keep the promising dice and reroll.', reason: 'Nothing scores yet — keep the promising dice and reroll.' };
   }
   if (legal.canRoll && best && best.points < 10 && legal.scoreable.length > 6) {
     const holds = suggestHolds(state);
-    return { action: 'roll', hold: holds, reason: `${getCategory(best.category).name} only scores ${best.points}; one more roll may do better.` };
+    return {
+      action: 'roll', hold: holds, category: best.category, points: best.points,
+      reasonKey: '{cat} only scores {n}; one more roll may do better.',
+      reason: `${getCategory(best.category).name} only scores ${best.points}; one more roll may do better.`,
+    };
   }
   return {
     action: 'score', category: best.category, points: best.points,
+    reasonKey: '{cat} scores {n} right now.',
     reason: `${getCategory(best.category).name} scores ${best.points} right now.`,
   };
 }

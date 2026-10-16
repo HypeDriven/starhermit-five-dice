@@ -17,6 +17,8 @@
 // nickname, the single cloud-save slot game:<slug>, the per-player settings KV
 // and the keyboard bindings. Tokens never persist to local storage.
 
+import { T, N } from './t.js';
+
 const LS_PREFIX = 'fivedice:';
 const REMOTE_BOOT_TIMEOUT_MS = 3000;
 
@@ -67,6 +69,8 @@ export class Platform {
     this.results = this.loadLocal('results') || [];
     if (!sh) return this;
     sh.on('saved', (ok) => this._setSync(ok ? 'synced' : 'error'));
+    // Another device saved since our last load: the SDK refused our write.
+    sh.on('saveconflict', () => { this.resolveConflict(); });
     sh.on('auth', (a) => {
       const was = this.hosted;
       this.hosted = !!a.signedIn;
@@ -203,22 +207,22 @@ export class Platform {
   statusLine() {
     if (this.hosted) {
       const sync = {
-        synced: 'cloud synced', saving: 'saving to cloud…',
-        error: 'cloud sync error', offline: 'offline',
-      }[this.syncState] || 'cloud synced';
-      return `Signed in as ${this.profile.name} · ${sync}`;
+        synced: N('cloud synced'), saving: N('saving to cloud…'),
+        error: N('cloud sync error'), offline: N('offline'),
+      }[this.syncState] || N('cloud synced');
+      return T('Signed in as {name} · {sync}', { name: this.profile.name, sync: T(sync) });
     }
-    return 'Local play — fully offline-capable';
+    return T('Local play — fully offline-capable');
   }
 
   syncLabel() {
     switch (this.syncState) {
       case 'synced': return this.hosted
-        ? 'Progress is synced to your account.'
-        : 'Progress is stored on this device.';
-      case 'saving': return 'Saving to the cloud…';
-      case 'error': return 'Cloud sync failed — will retry; progress is safe on this device.';
-      default: return 'Offline — progress is stored on this device.';
+        ? T('Progress is synced to your account.')
+        : T('Progress is stored on this device.');
+      case 'saving': return T('Saving to the cloud…');
+      case 'error': return T('Cloud sync failed — will retry; progress is safe on this device.');
+      default: return T('Offline — progress is stored on this device.');
     }
   }
 
@@ -262,6 +266,18 @@ export class Platform {
     }
     this._setSync('synced');
     return { source: 'same' };
+  }
+
+  // A conditional cloud write lost to another device: reload the cloud copy,
+  // merge it with this device's progress (nothing from either side is
+  // dropped), adopt the merge locally and save it again. The table in progress
+  // lives in the local autosave and is untouched.
+  async resolveConflict() {
+    const remote = await this.sh.loadJSON().catch(() => null);
+    this.progress = mergeProgress(remote, this.progress);
+    this.saveProgress({ cloud: false });
+    if (this.hosted && !this.sh.saveConflicted()) { this._setSync('saving'); this.sh.saveJSON(this.progress); }
+    else this._setSync('error');
   }
 
   // --- results / leaderboards ---------------------------------------------------------
@@ -357,23 +373,23 @@ export class Platform {
     if (this.hosted) {
       // Finished tables post to the platform `high-score` board (submitScore);
       // every hosted board reads it. Journey wins have no separate platform board.
-      if (board === 'journey') return { source: 'local', entries: local, label: 'casual (local)' };
+      if (board === 'journey') return { source: 'local', entries: local, label: N('casual (local)') };
       try {
         const boards = await this.sh.leaderboards();
         const meta = boards.find((x) => x.key === board) || boards[0];
-        if (!meta) return { source: 'local', entries: local, label: 'casual (local)' };
+        if (!meta) return { source: 'local', entries: local, label: N('casual (local)') };
         const res = await this.sh.leaderboardEntries(meta.id, { pageSize: 50, scope: friends ? 'friends' : undefined });
         const entries = [];
         for (const e of res.items || []) {
           const userId = e.userId ?? e.user?.id ?? null;
           entries.push({ name: await this.nicknameFor(userId), me: userId === this.userId, score: e.score ?? e.value ?? 0 });
         }
-        return { source: 'global', entries, label: friends ? 'friends' : 'global' };
+        return { source: 'global', entries, label: friends ? N('friends') : N('global') };
       } catch (e) {
-        return { source: 'local', entries: local, label: 'casual (local)', error: e.message };
+        return { source: 'local', entries: local, label: N('casual (local)'), error: e.message };
       }
     }
-    return { source: 'local', entries: local, label: 'casual (local)' };
+    return { source: 'local', entries: local, label: N('casual (local)') };
   }
 }
 function freshProgress() {
@@ -382,6 +398,38 @@ function freshProgress() {
     totals: { games: 0, wins: 0, points: 0, avalanches: 0 },
     streakDays: [], bestDaily: {},
   };
+}
+
+/**
+ * Merge two progress documents: the larger total of each counter, the union of
+ * cleared journey stages / challenges / achievements / active days, and the
+ * better best score and star count per stage, challenge and daily table.
+ */
+export function mergeProgress(remote, local) {
+  const a = { ...freshProgress(), ...(remote && typeof remote === 'object' ? remote : {}) };
+  const b = { ...freshProgress(), ...(local && typeof local === 'object' ? local : {}) };
+  const num = (x) => (Number.isFinite(x) ? x : 0);
+  const out = freshProgress();
+  out.rev = Math.max(num(a.rev), num(b.rev)) + 1;
+  for (const k of Object.keys(out.totals)) out.totals[k] = Math.max(num(a.totals?.[k]), num(b.totals?.[k]));
+  for (const key of ['journey', 'challenges']) {
+    for (const id of new Set([...Object.keys(a[key] || {}), ...Object.keys(b[key] || {})])) {
+      const x = a[key]?.[id] || {}, y = b[key]?.[id] || {};
+      const rec = { done: !!(x.done || y.done), best: Math.max(num(x.best), num(y.best)) };
+      if (key === 'journey') rec.stars = Math.max(num(x.stars), num(y.stars));
+      out[key][id] = rec;
+    }
+  }
+  for (const id of new Set([...Object.keys(a.achievements || {}), ...Object.keys(b.achievements || {})])) {
+    const x = a.achievements?.[id], y = b.achievements?.[id];
+    out.achievements[id] = x && y ? { at: Math.min(num(x.at) || Infinity, num(y.at) || Infinity) } : (x || y);
+    if (out.achievements[id].at === Infinity) out.achievements[id] = { at: Date.now() };
+  }
+  out.streakDays = [...new Set([...(a.streakDays || []), ...(b.streakDays || [])])].sort().slice(-60);
+  for (const id of new Set([...Object.keys(a.bestDaily || {}), ...Object.keys(b.bestDaily || {})])) {
+    out.bestDaily[id] = Math.max(num(a.bestDaily?.[id]), num(b.bestDaily?.[id]));
+  }
+  return out;
 }
 
 function publicEntry(r) {

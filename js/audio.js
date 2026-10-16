@@ -7,6 +7,7 @@
 // each with an independent slider. Seeded variants keep replays consistent.
 
 import { createStream, getCategory, UPPER_BONUS_THRESHOLD } from './rules.js';
+import { T } from './t.js';
 
 export class AudioEngine {
   constructor(settings, emitCaption = () => {}) {
@@ -192,14 +193,14 @@ export class AudioEngine {
           }
         }
         const n = e.rolled?.length || 5;
-        this.caption(`${n} ${n === 1 ? 'die' : 'dice'} rolled`);
+        this.caption(n === 1 ? T('1 die rolled') : T('{n} dice rolled', { n }));
         break;
       }
       case 'hold':
         if (!this.playSfx(e.held ? 'die-hold' : 'die-release')) {
           this.blip('effects', { freq: e.held ? 540 * v : 360 * v, dur: 0.06, type: 'sine', gain: 0.12 });
         }
-        this.caption(e.held ? 'Die held' : 'Die released');
+        this.caption(e.held ? T('Die held') : T('Die released'));
         break;
       case 'score': {
         const cat = getCategory(e.category);
@@ -218,7 +219,7 @@ export class AudioEngine {
               this.blip('effects', { freq: f, dur: 0.3, type: 'sine', gain: 0.18, delay: 0.15 + i * 0.1 }));
           }
         }
-        this.caption(`${e.points} points scored`);
+        this.caption(T('{n} points scored', { n: e.points }));
         // Upper bonus crossed on this very score: layer the lodge-bonus cue.
         const b = e.breakdown;
         if (b && b.bonus > 0 && cat?.section === 'upper' && b.upper - e.points < UPPER_BONUS_THRESHOLD) {
@@ -226,7 +227,7 @@ export class AudioEngine {
             [523, 659, 784].forEach((f, i) =>
               this.blip('effects', { freq: f, dur: 0.25, type: 'sine', gain: 0.16, delay: 0.25 + i * 0.09 }));
           }
-          this.caption('Lodge bonus earned');
+          this.caption(T('Lodge bonus earned'));
         }
         break;
       }
@@ -239,7 +240,7 @@ export class AudioEngine {
         if (!this.playSfx('invalid-move')) {
           this.blip('effects', { freq: 160, dur: 0.15, type: 'square', gain: 0.08, slide: -40 });
         }
-        this.caption('That action is not legal');
+        this.caption(T('That action is not legal'));
         break;
       case 'finish':
         if (e.reason === 'cards-complete') {
@@ -247,13 +248,13 @@ export class AudioEngine {
             [523, 659, 784, 1047].forEach((f, i) =>
               this.blip('effects', { freq: f, dur: 0.3, type: 'sine', gain: 0.2, delay: i * 0.11 }));
           }
-          this.caption('All cards complete — table finished');
+          this.caption(T('All cards complete — table finished'));
         } else {
           if (!this.playSfx('finish-table')) {
             [392, 330, 262].forEach((f, i) =>
               this.blip('effects', { freq: f, dur: 0.3, type: 'sine', gain: 0.18, delay: i * 0.14 }));
           }
-          this.caption('Table over');
+          this.caption(T('Table over'));
         }
         break;
       case 'hint':
@@ -289,7 +290,7 @@ export class AudioEngine {
         this.blip('effects', { freq: 660, dur: 0.12, type: 'triangle', gain: 0.14 });
         this.blip('effects', { freq: 990, dur: 0.16, type: 'triangle', gain: 0.12, delay: 0.09 });
       }
-      this.caption('Go');
+      this.caption(T('Go'));
       return;
     }
     if (!this.playSfx('countdown-tick')) {
@@ -304,7 +305,7 @@ export class AudioEngine {
       const seq = won ? [523, 659, 784, 1047, 1319] : [440, 392, 330];
       seq.forEach((f, i) => this.blip('effects', { freq: f, dur: 0.28, type: 'sine', gain: 0.16, delay: i * 0.12 }));
     }
-    this.caption(won ? 'You take the table' : 'The lodge keeps its crown');
+    this.caption(won ? T('You take the table') : T('The lodge keeps its crown'));
   }
 
   achievement() {
@@ -313,7 +314,7 @@ export class AudioEngine {
       [880, 1109, 1319, 1760].forEach((f, i) =>
         this.blip('effects', { freq: f, dur: 0.22, type: 'sine', gain: 0.12, delay: i * 0.07 }));
     }
-    this.caption('Achievement unlocked');
+    this.caption(T('Achievement unlocked'));
   }
 
   lessonComplete() {
@@ -322,7 +323,7 @@ export class AudioEngine {
       this.blip('effects', { freq: 784, dur: 0.12, type: 'sine', gain: 0.12 });
       this.blip('effects', { freq: 1047, dur: 0.18, type: 'sine', gain: 0.12, delay: 0.1 });
     }
-    this.caption('Lesson complete');
+    this.caption(T('Lesson complete'));
   }
 
   // --- ambience: quiet fire-crackle over low room noise --------------------------

@@ -3,13 +3,14 @@
 // resize, context loss), the countdown transition, AI turn pacing, the
 // authoritative-clock ticker, and one-input acknowledgment feedback.
 
-import { Platform } from './platform.js';
+import { Platform, ACHIEVEMENTS } from './platform.js';
 import { platformStrings } from './platform-i18n.js';
+import { T, N } from './t.js';
 import { Session } from './session.js';
 import { AudioEngine } from './audio.js';
 import { UI } from './ui.js';
 import { getTheme, validateContent, dailyForDate } from './content.js';
-import { currentPlayer } from './rules.js';
+import { currentPlayer, getCategory } from './rules.js';
 
 const AI_PACE_MS = 650; // presentation pacing between AI command batches
 
@@ -25,7 +26,7 @@ async function boot() {
   platform.onAchievements = (keys) => {
     platform.lastAchievements = [...(platform.lastAchievements || []), ...keys];
     audio.achievement();
-    ui?.toast(`🏆 Achievement unlocked: ${keys.join(', ')}`);
+    ui?.toast(T('🏆 Achievement unlocked: {names}', { names: keys.map((k) => T(ACHIEVEMENTS.find((a) => a.key === k)?.name || k)).join(', ') }));
   };
 
   // Renderer: 3D is optional; the semantic UI remains fully usable without it.
@@ -37,16 +38,14 @@ async function boot() {
       const { Renderer } = await import('./render.js');
       renderer = new Renderer(canvas, platform.settings, getTheme(platform.settings.theme));
       renderer.onContextLost = () => {
-        ui?.toast('Graphics context lost — rebuilding… (your table is safe)');
+        ui?.toast(T('Graphics context lost — rebuilding… (your table is safe)'));
       };
       renderer.init();
       if (session.state) renderer.updateState(session.state, {});
     } catch (err) {
       rendererFailed = true;
       document.getElementById('dice-stage').hidden = true;
-      ui?.showCompatibility(
-        '3D rendering is unavailable in this browser, so the table is shown as ' +
-        'the accessible card-and-dice panel. Your progress and saves are unaffected.');
+      ui?.showCompatibility(N('3D rendering is unavailable in this browser, so the table is shown as the accessible card-and-dice panel. Your progress and saves are unaffected.'));
     }
   }
 
@@ -57,13 +56,13 @@ async function boot() {
     resumeSaved,
     giveUp: () => {
       const r = session.giveUp();
-      if (r.error) ui.toast('Nothing to leave.');
+      if (r.error) ui.toast(T('Nothing to leave.'));
     },
     tryRoll: () => guard(() => session.roll()),
     tryHold: (i) => guard(() => session.toggleHold(i)),
     tryScore: (cat) => guard(() => {
       if (platform.settings.holdToConfirm) {
-        ui.confirm(`Score ${cat}?`, () => session.scoreCategory(cat));
+        ui.confirm(() => T('Score {cat}?', { cat: T(getCategory(cat)?.name || cat) }), () => session.scoreCategory(cat));
       } else {
         session.scoreCategory(cat);
       }
@@ -74,7 +73,7 @@ async function boot() {
     },
     tryUndo: () => {
       const r = session.undo();
-      if (r.error) ui.toast('Undo is not available here.');
+      if (r.error) ui.toast(T('Undo is not available here.'));
       else {
         renderer?.updateState(session.state, {});
         scheduleAI();
@@ -169,7 +168,7 @@ async function boot() {
     el.hidden = false;
     let n = 3;
     el.textContent = String(n);
-    ui.announce('Table ready. Starting in 3.');
+    ui.announce(T('Table ready. Starting in 3.'));
     audio.countdownTick();
     const tick = () => {
       n -= 1;
@@ -177,7 +176,7 @@ async function boot() {
         el.hidden = true;
         audio.countdownTick(true);
         session.beginActive();
-        ui.announce('Go!');
+        ui.announce(T('Go!'));
         scheduleAI();
         return;
       }
@@ -233,7 +232,7 @@ async function boot() {
   function resumeSaved() {
     const snap = session.restoreSnapshot();
     if (!snap) {
-      ui.toast('No saved table found.');
+      ui.toast(T('No saved table found.'));
       ui.showTitle();
       return;
     }
@@ -261,9 +260,9 @@ async function boot() {
     const die = renderer?.pickDie(e.clientX, e.clientY);
     if (die != null) {
       const r = session.toggleHold(die);
-      if (r?.error === 'not-your-turn') ui.toast('Wait for your turn.');
+      if (r?.error === 'not-your-turn') ui.toast(T('Wait for your turn.'));
       else if (r?.error === 'lesson-gated') { /* banner explains */ }
-      else if (r?.error) ui.toast('Hold is not available right now.');
+      else if (r?.error) ui.toast(T('Hold is not available right now.'));
     }
   });
   canvas.addEventListener('pointercancel', () => { pointerDown = null; });
@@ -304,7 +303,7 @@ async function boot() {
   }
   ui.showTitle();
   if (session.hasSnapshot()) {
-    ui.toast('A saved table is waiting — Resume from the title menu.');
+    ui.toast(T('A saved table is waiting — Resume from the title menu.'));
   }
 
   // Expose a minimal deterministic harness for automated smoke tests.

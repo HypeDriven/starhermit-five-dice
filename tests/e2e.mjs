@@ -34,7 +34,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SHOT = (stage, tag) => `/tmp/five-dice-e2e-${stage}-${tag}.png`;
+const SHOT = (stage, tag) => `${process.env.SHOT_DIR || '/tmp'}/five-dice-e2e-${stage}-${tag}.png`;
 
 // Benign GPU/swiftshader console noise (matches tools/production_game_audit.mjs).
 const browserNoise = /GL Driver Message|GPU stall due to ReadPixels|Automatic fallback to software WebGL|EnableWebGLDeveloperExtensions/i;
@@ -59,6 +59,10 @@ const MIME = {
 };
 
 const apiLog = [];
+// Hosted-pass platform state the Language step reads back (server-side mocks).
+const mock = { language: 'en', settings: {}, reports: [] };
+
+const readBody = (req) => new Promise((resolve) => { let b = ''; req.on('data', (c) => { b += c; }); req.on('end', () => resolve(b)); });
 
 function startServer() {
   const server = http.createServer((req, res) => {
@@ -74,11 +78,18 @@ function startServer() {
       };
       const dp = decodeURIComponent(p);
       if (dp.endsWith('/profile')) return json({ username: 'raw_name', nickname: 'Juniper' });
-      if (dp.endsWith('/settings') && req.method === 'GET') return json({ settings: { volMusic: 0.25 } });
+      if (dp === '/api/v1/me/language') return json({ preferredLanguage: mock.language });
+      if (dp.endsWith('/settings') && req.method === 'GET') return json({ settings: { volMusic: 0.25, ...mock.settings } });
       if (dp.endsWith('/settings')) return json({ settings: {} });
+      if (/\/settings\/[^/]+$/.test(dp) && req.method === 'PUT') {
+        return readBody(req).then((b) => { mock.settings[dp.split('/').pop()] = JSON.parse(b).value; json({}); });
+      }
+      if (/\/reports$/.test(dp) && req.method === 'POST') {
+        return readBody(req).then((b) => { mock.reports.push(JSON.parse(b)); json({ id: 'r1', kind: 'bug', status: 'open', createdAt: new Date().toISOString() }, 201); });
+      }
       if (dp.endsWith('/controls')) return json({ actions: [] });
       if (dp.endsWith('/cloud-saves/game:five-dice-test/info')) return json({ exists: false });
-      if (dp.endsWith('/cloud-saves/game:five-dice-test')) return json({});
+      if (dp.endsWith('/cloud-saves/game:five-dice-test')) return json(req.method === 'PUT' ? { etag: '"v' + apiLog.length + '"' } : {});
       if (dp.endsWith('/leaderboards')) return json([]);
       return json({ error: 'not found' }, 404);
     }
@@ -303,9 +314,11 @@ async function playPass(browser, base, { tag, viewport, mobile }) {
 }
 
 // Hosted pass: launch-token fragment → nickname status, synced settings,
-// invite link copied through the visible title-menu entry, cloud save PUT.
-async function hostedPass(browser, base) {
-  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+// invite link copied through the visible title-menu entry, cloud save PUT;
+// then the Language step (account preference, live switch, ui.language,
+// Report a problem). Runs at desktop and mobile sizes.
+async function hostedPass(browser, base, { tag, viewport, mobile }) {
+  const context = await browser.newContext({ viewport, ...(mobile ? { hasTouch: true, isMobile: true } : {}) });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
@@ -319,7 +332,7 @@ async function hostedPass(browser, base) {
   const b64u = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
   const token = 'h.' + b64u({ sub: 'u-1234567', game_scope: 'five-dice-test', exp: Math.floor(Date.now() / 1000) + 3600 }) + '.s';
   try {
-    await step('[hosted] launch token → nickname, synced settings, invite link', async () => {
+    await step(`[hosted ${tag}] launch token → nickname, synced settings, invite link`, async () => {
       await page.goto(`${base}/#game_token=${token}`, { waitUntil: 'load' });
       await page.waitForSelector('.overlay[aria-label="Five Dice"]', { timeout: 15000 });
       if (new URL(page.url()).hash) throw new Error('launch token left in the URL');
@@ -332,7 +345,83 @@ async function hostedPass(browser, base) {
       const copied = await page.evaluate(() => window.__copied[0]);
       if (!/\/game-invite\/u-1234567\/five-dice-test$/.test(copied)) throw new Error('bad invite link ' + copied);
       if (!apiLog.some((l) => l === 'PUT /api/v1/me/cloud-saves/game%3Afive-dice-test')) throw new Error('empty cloud slot was not seeded: ' + apiLog.join(', '));
-      await page.screenshot({ path: SHOT('title', 'hosted') });
+      await page.screenshot({ path: SHOT('title', 'hosted-' + tag) });
+    });
+
+    await step(`[hosted ${tag}] Language: Automatic follows the StarHermit preferred language; live switch mid-table; ui.language; report a problem`, async () => {
+      mock.language = 'fr-CA'; mock.settings = {}; mock.reports = [];
+      const fits = () => page.evaluate(() => {
+        if (document.documentElement.scrollWidth > window.innerWidth + 1) return 'page scrolls sideways';
+        const o = document.querySelector('.overlay');
+        const bad = o && [...o.querySelectorAll('button, select, input, label, h2, h3, p, span')].find((el) => {
+          const r = el.getBoundingClientRect();
+          return r.width && (r.right > window.innerWidth + 1 || r.left < -1 || el.scrollWidth > el.clientWidth + 2 && getComputedStyle(el).overflow === 'hidden');
+        });
+        return bad ? 'cut off: ' + (bad.textContent || bad.outerHTML).slice(0, 80) : '';
+      });
+      await page.goto('about:blank');
+      await page.goto(`${base}/#game_token=${token}`, { waitUntil: 'load' });
+      await page.waitForFunction(() => document.documentElement.lang === 'fr-CA', null, { timeout: 10000 });
+      await page.waitForSelector('.overlay[data-overlay="Five Dice"]');
+      await page.locator('.overlay .menu-list button', { hasText: 'Paramètres' }).click();
+      await page.waitForSelector('.overlay[data-overlay="Settings"] #gfx-section');
+      const choice = page.locator('[data-game-language="choice"]');
+      await choice.scrollIntoViewIfNeeded();
+      const auto = await choice.locator('option').first().textContent();
+      if (!/^Automatique — Français \(Canada\)$/.test(auto)) throw new Error('Automatic label not resolved: ' + auto);
+      const select = await choice.elementHandle();
+      await choice.selectOption('it-IT');
+      await page.waitForFunction(() => document.documentElement.lang === 'it-IT');
+      await page.waitForFunction(() => /Salvato/.test(document.querySelector('[data-game-language="status"]').textContent));
+      if (mock.settings['ui.language']?.choice !== 'it-IT') throw new Error('ui.language not saved: ' + JSON.stringify(mock.settings));
+      const re = await page.evaluate(() => [...document.querySelectorAll('.overlay[data-overlay="Settings"] h3')].map((h) => h.textContent).join('|'));
+      if (!/Schermo/.test(re) || !/Comandi e accessibilità/.test(re)) throw new Error('settings not re-rendered: ' + re);
+      if (await page.getAttribute('.overlay[data-overlay="Settings"]', 'aria-label') !== 'Impostazioni') throw new Error('dialog label not re-rendered');
+      if (!await select.evaluate((el) => el.isConnected)) throw new Error('shared Language select was redrawn');
+      await page.locator('[data-game-report="title"]').scrollIntoViewIfNeeded();
+      await page.fill('[data-game-report="title"]', 'Test report');
+      await page.click('[data-game-report="send"]');
+      await page.waitForFunction(() => /Grazie/.test(document.querySelector('[data-game-report="status"]').textContent));
+      if (mock.reports[0]?.kind !== 'bug') throw new Error('report not posted: ' + JSON.stringify(mock.reports));
+      await page.screenshot({ path: SHOT('language', tag) });
+      // German (the longest strings) must fit at this width.
+      await choice.selectOption('de-DE');
+      await page.waitForFunction(() => document.documentElement.lang === 'de-DE');
+      const settingsFit = await fits();
+      if (settingsFit) throw new Error('German settings: ' + settingsFit);
+      await page.screenshot({ path: SHOT('language-de-settings', tag), fullPage: true });
+      await page.locator('.overlay .overlay-close').click();
+      await page.waitForSelector('.overlay[data-overlay="Five Dice"]');
+      if (!await page.locator('.overlay .menu-list button', { hasText: 'Einstellungen' }).count()) throw new Error('title not in German');
+      const titleFit = await fits();
+      if (titleFit) throw new Error('German title: ' + titleFit);
+      await page.screenshot({ path: SHOT('language-de-title', tag), fullPage: true });
+      // Switching mid-table keeps the round and re-renders the HUD in place.
+      await page.locator('.overlay .menu-list button', { hasText: 'Training' }).click();
+      await page.locator('.overlay .menu-list button', { hasText: 'Glut' }).click();
+      await page.waitForFunction(() => window.__fivedice.session.machine === 'active', null, { timeout: 15000 });
+      await page.evaluate(() => { window.__sameTable = window.__fivedice.session.def; });
+      if (!/Würfeln/.test(await page.locator('#action-tray #btn-roll').textContent())) throw new Error('HUD not in German');
+      const hudFit = await fits();
+      if (hudFit) throw new Error('German HUD: ' + hudFit);
+      await page.screenshot({ path: SHOT('language-de-hud', tag) });
+      await page.click('#btn-settings-top');
+      await choice.scrollIntoViewIfNeeded();
+      await choice.selectOption('fr-FR');
+      await page.waitForFunction(() => document.documentElement.lang === 'fr-FR');
+      await page.locator('.overlay .overlay-close').click();
+      await page.waitForFunction(() => /Lancer/.test(document.querySelector('#action-tray #btn-roll')?.textContent || ''));
+      const same = await page.evaluate(() => window.__sameTable === window.__fivedice.session.def && window.__fivedice.session.state?.status === 'active');
+      if (!same) throw new Error('the table restarted on a language change');
+      if (await page.getAttribute('#btn-settings-top', 'aria-label') !== 'Paramètres') throw new Error('static markup not re-rendered');
+      // Back to Automatic: the account language again.
+      await page.click('#btn-settings-top');
+      await choice.scrollIntoViewIfNeeded();
+      await choice.selectOption('auto');
+      await page.waitForFunction(() => document.documentElement.lang === 'fr-CA');
+      if (mock.settings['ui.language']?.choice !== 'auto') throw new Error('auto not saved');
+      await page.locator('.overlay .overlay-close').click();
+      mock.language = 'en';
     });
     if (errors.length) throw new Error(`hosted pass page errors:\n${errors.join('\n')}`);
   } finally {
@@ -350,7 +439,8 @@ try {
   console.log(`serving ${ROOT} on ${base}`);
   await playPass(browser, base, { tag: 'desktop', viewport: { width: 1280, height: 800 }, mobile: false });
   await playPass(browser, base, { tag: 'mobile', viewport: { width: 390, height: 844 }, mobile: true });
-  await hostedPass(browser, base);
+  await hostedPass(browser, base, { tag: 'desktop', viewport: { width: 1280, height: 800 }, mobile: false });
+  await hostedPass(browser, base, { tag: 'mobile', viewport: { width: 390, height: 844 }, mobile: true });
   console.log('\nE2E PASS — full Five Dice table completed on desktop and mobile, no unexpected page errors');
 } finally {
   await browser.close();

@@ -125,7 +125,7 @@ const TRAILS = [
   { id: 'summits',    name: 'Summit of Lights', theme: 'starlit' },
 ];
 
-const STAGE_NAMES = [
+export const STAGE_NAMES = [
   'Warming Up', 'First Steps', 'Steady Hands', 'Quiet Focus',
   'Trail Marker', 'Halfway Hearth', 'Long Shadows', 'Mastery',
 ];

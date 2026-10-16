@@ -12,12 +12,15 @@
 <script src="/ui-scale.js"></script>
 <script src="browser-guard.js"></script>
 <script src="/starhermit-sdk.js"></script>
+<script src="/sh-language.js"></script>
+<script src="/js/strings.js"></script>
+<script src="/js/i18n.js"></script>
 </head>
 <body>
 <a class="skip-link" href="#action-tray">Skip to actions</a>
 <div id="app">
   <header id="topbar">
-    <h1 class="game-title">Five Dice</h1>
+    <h1 class="game-title" data-i18n-skip>Five Dice</h1>
     <p id="session-status" class="session-status" aria-live="off"></p>
     <nav class="topbar-actions" aria-label="Game">
       <button type="button" id="btn-pause" class="icon-btn" aria-label="Pause" hidden>&#10073;&#10073;</button>

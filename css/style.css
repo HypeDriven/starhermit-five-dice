@@ -124,7 +124,7 @@ button:focus-visible, [tabindex]:focus-visible, a:focus-visible {
 }
 .die-btn .pip { font-size: 1.6rem; line-height: 1; }
 .die-btn.held { border-color: var(--select); transform: translateY(-8px); }
-.die-btn.held::after { content: "HELD"; position: absolute; bottom: -1.15rem; left: 0; right: 0;
+.die-btn.held::after { content: attr(data-held); position: absolute; bottom: -1.15rem; left: 0; right: 0;
   font-size: 0.55rem; letter-spacing: 0.08em; color: var(--select); }
 .die-btn:disabled { opacity: 0.55; cursor: default; transform: none; }
 body.high-contrast .die-btn.held { outline: 3px dashed var(--select); outline-offset: 2px; }
@@ -284,7 +284,8 @@ body.reduced-motion .rail { transition: none; }
   .dice-tray { bottom: calc(8.2rem + var(--sab)); } /* clears a 2-row wrapped action tray */
   .action-tray {
     bottom: calc(0.9rem + var(--sab));
-    max-width: calc(100vw - 1rem - var(--sal) - var(--sar));
+    /* max-content: wrap only at the viewport, not at half of it (left: 50%). */
+    width: max-content; max-width: calc(100vw - 1rem - var(--sal) - var(--sar));
     flex-wrap: wrap; justify-content: center;
   }
   .action-tray .btn { min-height: 52px; font-size: 1.05em; padding: 0.4rem 0.7rem; }

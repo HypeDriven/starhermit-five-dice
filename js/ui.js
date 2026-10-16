@@ -11,7 +11,7 @@ import {
 } from './rules.js';
 import {
   THEMES, LESSONS, JOURNEY, TRAILS, CHALLENGES, PRACTICE_DIFFICULTIES,
-  practiceDef, dailyForDate, CONTENT_VERSION,
+  practiceDef, dailyForDate, CONTENT_VERSION, STAGE_NAMES,
 } from './content.js';
 import { ACHIEVEMENTS, DEFAULT_KEYS } from './platform.js';
 import { platformStrings } from './platform-i18n.js';
@@ -20,6 +20,7 @@ import {
   presetTier as gfxPresetTier, choosePreset as gfxChoosePreset, describe as gfxDescribe,
 } from './gfx.js';
 import { gfxStrings } from './gfx-i18n.js';
+import { T, N, playerName } from './t.js';
 
 const PIP_GLYPHS = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
 
@@ -50,6 +51,49 @@ export class UI {
     this.bindTopbar();
     this.pollGamepads = this.pollGamepads.bind(this);
     requestAnimationFrame(this.pollGamepads);
+    this._reopen = null;         // rebuilds the open overlay in the current language
+    this._compat = null;         // key of the compatibility message, if shown
+    document.addEventListener('fd-language', () => this.relocalize());
+  }
+
+  // The game language changed (Settings › Language or the account preference
+  // arriving): re-render every visible string in place. The round, the dice
+  // and any open overlay keep their state; Settings re-renders only its own
+  // boxes so the shared Language/Sound/Report sections stay mounted.
+  relocalize() {
+    if (!this.hudVisible) this.setStatus(this.platform.statusLine());
+    else this.updateHUD();
+    if (this._compat) this._els['compat-message'].textContent = T(this._compat);
+    if (!this.overlay) return;
+    this.overlay.querySelector('.overlay-close')?.setAttribute('aria-label', T('Close'));
+    this.overlay.querySelector('.overlay')?.setAttribute('aria-label', T(this.overlayKind));
+    if (this.overlayKind === 'Settings' && this._settingsParts?.root.isConnected) this.renderSettingsParts();
+    else if (this._reopen) {
+      const back = this.lastFocus, onClose = this._onClose;
+      this._reopen();
+      this.lastFocus = back;
+      if (onClose) this._onClose = onClose;
+    }
+  }
+
+  /** Localized display title of a content definition. */
+  defTitle(def) {
+    if (!def) return '';
+    if (def.mode === 'journey' && def.trail) {
+      const trail = TRAILS.find((t) => t.id === def.trail);
+      const step = (def.stage - 1) % 8;
+      return T('{trail} {n} — {stage}', {
+        trail: T(trail?.name || def.trail), n: step + 1,
+        stage: def.mastery ? T('Mastery Stage') : T(STAGE_NAMES[step]),
+      });
+    }
+    if (def.mode === 'daily' && def.day) return T('Daily Table — {day}', { day: def.day });
+    if (def.mode === 'practice') {
+      const diff = PRACTICE_DIFFICULTIES[String(def.id).split('-')[1]];
+      const name = T(diff?.name || 'Hearth');
+      return def.players?.length === 1 ? T('Practice — {name} (solo)', { name }) : T('Practice — {name}', { name });
+    }
+    return T(def.name);
   }
 
   get session() { return this.env.session; }
@@ -152,10 +196,10 @@ export class UI {
     this.closeOverlay();
     this._onClose = onClose;
     this.lastFocus = document.activeElement;
-    const content = this.h('div', { class: 'overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': kind });
+    const content = this.h('div', { class: 'overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': T(kind), 'data-overlay': kind });
     if (dismissible) {
       content.prepend(this.h('button', {
-        type: 'button', class: 'btn overlay-close', 'aria-label': 'Close',
+        type: 'button', class: 'btn overlay-close', 'aria-label': T('Close'),
         text: '✕', onclick: () => this.closeOverlay(),
       }));
     }
@@ -167,6 +211,7 @@ export class UI {
     this._els['overlay-root'].append(backdrop);
     this.overlay = backdrop;
     this.overlayKind = kind;
+    this._reopen = null;
     // Focus the first actionable control; restore focus on close (no traps).
     const first = content.querySelector('button:not(.overlay-close), [href], input, select') ||
       content.querySelector('.overlay-close');
@@ -179,25 +224,28 @@ export class UI {
     this.overlay.remove();
     this.overlay = null;
     this.overlayKind = null;
+    this._reopen = null;
     if (this.lastFocus && document.contains(this.lastFocus)) this.lastFocus.focus();
     const cb = this._onClose;
     this._onClose = null;
     cb?.();
   }
 
+  // `message` may be a function so the text follows a language change.
   confirm(message, onYes) {
     this.openOverlay('Confirm', (c) => {
-      c.append(this.h('p', { text: message }));
+      c.append(this.h('p', { text: typeof message === 'function' ? message() : message }));
       c.append(this.h('div', { class: 'btn-row' },
         this.h('button', {
-          type: 'button', class: 'btn danger', text: 'Yes',
+          type: 'button', class: 'btn danger', text: T('Yes'),
           onclick: () => { this.closeOverlay(); onYes(); },
         }),
         this.h('button', {
-          type: 'button', class: 'btn', text: 'Cancel',
+          type: 'button', class: 'btn', text: T('Cancel'),
           onclick: () => this.closeOverlay(),
         })));
     });
+    this._reopen = () => this.confirm(message, onYes);
   }
 
   // --- title / mode select -------------------------------------------------------
@@ -213,8 +261,7 @@ export class UI {
 
     const title = this.openOverlay('Five Dice', (c) => {
       c.append(this.h('p', {
-        text: 'A cozy mountain-lodge dice table. Roll five dice up to three times, ' +
-          'hold the keepers, and fill your card — highest total wins.',
+        text: T('A cozy mountain-lodge dice table. Roll five dice up to three times, hold the keepers, and fill your card — highest total wins.'),
       }));
       const list = this.h('ul', { class: 'menu-list' });
       const add = (label, sub, fn, primary = false) => {
@@ -223,23 +270,24 @@ export class UI {
           onclick: () => { this.env.audio.uiClick(); fn(); },
         }, this.h('span', { text: label }), this.h('span', { class: 'sub', text: sub }))));
       };
-      if (hasSave) add('Resume Table', 'continue your saved round', () => { this.closeOverlay(); this.env.resumeSaved(); }, true);
-      add('Practice', 'quick table vs the lodge AI', () => this.showPracticeSetup(), !hasSave);
-      add('Daily Table', doneToday ? `${daily.day} — played, best ${p.progress.bestDaily[daily.id]}` : `${daily.day} — shared seed`, () => {
+      if (hasSave) add(T('Resume Table'), T('continue your saved round'), () => { this.closeOverlay(); this.env.resumeSaved(); }, true);
+      add(T('Practice'), T('quick table vs the lodge AI'), () => this.showPracticeSetup(), !hasSave);
+      add(T('Daily Table'), doneToday ? T('{day} — played, best {best}', { day: daily.day, best: p.progress.bestDaily[daily.id] }) : T('{day} — shared seed', { day: daily.day }), () => {
         this.closeOverlay(); this.env.startContent(daily);
       });
-      add('Journey', `${journeyDone} / ${JOURNEY.length} stages cleared`, () => this.showJourney());
-      add('Learn', 'interactive lessons, one rule at a time', () => this.showLessons());
-      add('Challenges', 'constrained tables for sharp players', () => this.showChallenges());
-      add('Profile & Scores', 'achievements, leaderboards, stats', () => this.showProfile());
+      add(T('Journey'), T('{n} / {total} stages cleared', { n: journeyDone, total: JOURNEY.length }), () => this.showJourney());
+      add(T('Learn'), T('interactive lessons, one rule at a time'), () => this.showLessons());
+      add(T('Challenges'), T('constrained tables for sharp players'), () => this.showChallenges());
+      add(T('Profile & Scores'), T('achievements, leaderboards, stats'), () => this.showProfile());
       const ps = platformStrings();
       if (p.canSignIn) add(ps.signIn, ps.signInSub, () => p.signIn());
       if (p.hosted) add(ps.invite, ps.inviteSub, () => this.copyInvite());
-      add('Help & Rules', 'how a table works', () => this.showHelp());
-      add('Settings', 'audio, display, graphics, controls', () => this.showSettings({ onClose: () => this.showTitle() }));
+      add(T('Help & Rules'), T('how a table works'), () => this.showHelp());
+      add(T('Settings'), T('audio, display, language, graphics, controls'), () => this.showSettings({ onClose: () => this.showTitle() }));
       c.append(list);
-      c.append(this.h('p', { class: 'muted', text: `Content v${CONTENT_VERSION} · Rules v1 · seed-fair: every table is replayable and inspectable.` }));
+      c.append(this.h('p', { class: 'muted', text: T('Content v{v} · Rules v1 · seed-fair: every table is replayable and inspectable.', { v: CONTENT_VERSION }) }));
     }, { dismissible: false });
+    this._reopen = () => this.showTitle();
     // Lodge key art behind the title card (CSS background: a missing file
     // simply leaves the plain dimmed backdrop).
     title.parentElement?.classList.add('title-backdrop');
@@ -259,20 +307,21 @@ export class UI {
 
   showPracticeSetup() {
     this.openOverlay('Practice setup', (c) => {
-      c.append(this.h('p', { class: 'muted', text: 'Unranked. Undo and hints are on; restart freely.' }));
+      c.append(this.h('p', { class: 'muted', text: T('Unranked. Undo and hints are on; restart freely.') }));
       const list = this.h('ul', { class: 'menu-list' });
       for (const d of Object.values(PRACTICE_DIFFICULTIES)) {
         list.append(this.h('li', {}, this.h('button', {
           type: 'button', class: 'btn',
           onclick: () => { this.closeOverlay(); this.env.startContent(practiceDef({ difficulty: d.id })); },
-        }, this.h('span', { text: d.name }), this.h('span', { class: 'sub', text: d.blurb }))));
+        }, this.h('span', { text: T(d.name) }), this.h('span', { class: 'sub', text: T(d.blurb) }))));
       }
       list.append(this.h('li', {}, this.h('button', {
         type: 'button', class: 'btn',
         onclick: () => { this.closeOverlay(); this.env.startContent(practiceDef({ difficulty: 'hearth', humans: 2, aiOpponents: 0 })); },
-      }, this.h('span', { text: 'Two players, one screen' }), this.h('span', { class: 'sub', text: 'pass-and-play, no AI' }))));
+      }, this.h('span', { text: T('Two players, one screen') }), this.h('span', { class: 'sub', text: T('pass-and-play, no AI') }))));
       c.append(list);
     });
+    this._reopen = () => this.showPracticeSetup();
   }
 
   showLessons() {
@@ -283,10 +332,11 @@ export class UI {
         list.append(this.h('li', {}, this.h('button', {
           type: 'button', class: 'btn',
           onclick: () => { this.closeOverlay(); this.env.startContent(l); },
-        }, this.h('span', { text: `${i + 1}. ${l.name}${done ? ' ✓' : ''}` }))));
+        }, this.h('span', { text: `${i + 1}. ${T(l.name)}${done ? ' ✓' : ''}` }))));
       });
       c.append(list);
     });
+    this._reopen = () => this.showLessons();
   }
 
   showJourney() {
@@ -295,7 +345,7 @@ export class UI {
       let unlockedIdx = 0;
       while (unlockedIdx < JOURNEY.length && progress[JOURNEY[unlockedIdx].id]?.done) unlockedIdx++;
       TRAILS.forEach((trail, t) => {
-        c.append(this.h('h3', { text: trail.name }));
+        c.append(this.h('h3', { text: T(trail.name) }));
         const grid = this.h('div', { class: 'card-grid' });
         for (let s = 0; s < 8; s++) {
           const stage = JOURNEY[t * 8 + s];
@@ -303,16 +353,17 @@ export class UI {
           const locked = t * 8 + s > unlockedIdx;
           grid.append(this.h('button', {
             type: 'button', class: `stage-card${stage.mastery ? ' mastery' : ''}`,
-            disabled: locked, 'aria-label': `${stage.name}${locked ? ' (locked)' : ''}`,
+            disabled: locked, 'aria-label': locked ? T('{name} (locked)', { name: this.defTitle(stage) }) : this.defTitle(stage),
             onclick: () => { this.closeOverlay(); this.env.startContent(stage); },
           },
-            this.h('div', { text: `${stage.stage}. ${stage.mastery ? 'Mastery' : ''}` }),
+            this.h('div', { text: `${stage.stage}. ${stage.mastery ? T('Mastery') : ''}` }),
             this.h('div', { class: 'stars', text: rec?.done ? '★'.repeat(rec.stars || 1) : (locked ? '🔒' : '—') }),
-            this.h('div', { class: 'muted', text: stage.goal?.type === 'score' ? `Target ${stage.goal.target}` : `${stage.players.length}-handed` })));
+            this.h('div', { class: 'muted', text: stage.goal?.type === 'score' ? T('Target {n}', { n: stage.goal.target }) : T('{n}-handed', { n: stage.players.length }) })));
         }
         c.append(grid);
       });
     });
+    this._reopen = () => this.showJourney();
   }
 
   showChallenges() {
@@ -324,11 +375,12 @@ export class UI {
           type: 'button', class: 'btn',
           onclick: () => { this.closeOverlay(); this.env.startContent(ch); },
         },
-          this.h('span', { text: `${ch.name}${rec?.done ? ' ✓' : ''}` }),
-          this.h('span', { class: 'sub', text: ch.blurb }))));
+          this.h('span', { text: `${T(ch.name)}${rec?.done ? ' ✓' : ''}` }),
+          this.h('span', { class: 'sub', text: T(ch.blurb) }))));
       }
       c.append(list);
     });
+    this._reopen = () => this.showChallenges();
   }
 
   // --- help ------------------------------------------------------------------------
@@ -338,86 +390,108 @@ export class UI {
     const name = (code) => ({ Escape: 'Esc', ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', NumpadEnter: 'Enter' }[code] || code.replace(/^(Key|Digit|Numpad)/, ''));
     const key = (codes) => [...new Set(codes.map(name))].join('/');
     this.openOverlay('Help & Rules', (c) => {
-      c.append(this.h('h3', { text: 'How a table works' }));
-      c.append(this.h('p', { text: 'Roll five dice. You may reroll any unheld dice twice more (three rolls total). Tap a die to hold it between rolls. Then choose exactly one open category on the card to score. When every category on every card is filled, the highest grand total wins.' }));
-      c.append(this.h('h3', { text: 'The card' }));
+      c.append(this.h('h3', { text: T('How a table works') }));
+      c.append(this.h('p', { text: T('Roll five dice. You may reroll any unheld dice twice more (three rolls total). Tap a die to hold it between rolls. Then choose exactly one open category on the card to score. When every category on every card is filled, the highest grand total wins.') }));
+      c.append(this.h('h3', { text: T('The card') }));
       const ul = this.h('ul');
       for (const cat of CATEGORIES) {
-        ul.append(this.h('li', { text: `${cat.name} — ${cat.desc}` }));
+        ul.append(this.h('li', { text: `${T(cat.name)} — ${T(cat.desc)}` }));
       }
       c.append(ul);
-      c.append(this.h('p', { text: `Upper rows (Kindling…Peaks) totaling ${UPPER_BONUS_THRESHOLD}+ earn a ${UPPER_BONUS}-point lodge bonus.` }));
-      c.append(this.h('h3', { text: 'Controls' }));
-      c.append(this.h('p', { text: `Roll: ${key(b.roll)} or the Roll button. Hold die: ${[0, 1, 2, 3, 4].map((i) => key(b[`hold${i}`])).join(', ')} or tap. Hint: ${key(b.hint)}. Undo: ${key(b.undo)} where allowed. Pause: ${key(b.pause)}. Camera: ${key(b.camera)}. ${key(b.focusPrev)}/${key(b.focusNext)} move focus; ${key(b.confirm)} confirms. Gamepad: D-pad moves focus, A holds, X rolls, Start pauses.` }));
-      c.append(this.h('p', { class: 'muted', text: 'Every table is seeded and replayable; the same seed and choices always produce the same dice.' }));
+      c.append(this.h('p', { text: T('Upper rows ({first}…{last}) totaling {n}+ earn a {bonus}-point lodge bonus.', { first: T('Kindling'), last: T('Peaks'), n: UPPER_BONUS_THRESHOLD, bonus: UPPER_BONUS }) }));
+      c.append(this.h('h3', { text: T('Controls') }));
+      c.append(this.h('p', { text: T('Roll: {roll} or the Roll button. Hold die: {hold} or tap. Hint: {hint}. Undo: {undo} where allowed. Pause: {pause}. Camera: {camera}. {prev}/{next} move focus; {confirm} confirms. Gamepad: D-pad moves focus, A holds, X rolls, Start pauses.', {
+        roll: key(b.roll), hold: [0, 1, 2, 3, 4].map((i) => key(b[`hold${i}`])).join(', '), hint: key(b.hint), undo: key(b.undo),
+        pause: key(b.pause), camera: key(b.camera), prev: key(b.focusPrev), next: key(b.focusNext), confirm: key(b.confirm),
+      }) }));
+      c.append(this.h('p', { class: 'muted', text: T('Every table is seeded and replayable; the same seed and choices always produce the same dice.') }));
     });
+    this._reopen = () => this.showHelp();
   }
 
   // --- settings ---------------------------------------------------------------------
 
+  // Settings: the game's own controls live in three boxes (before, graphics,
+  // after) that re-render on their own; the shared game-options.js sections
+  // (frame rate, Language, Sound, Report a problem) mount inside the graphics
+  // <section> next to the inner box and are never redrawn by the game.
   showSettings({ onClose = null } = {}) {
-    const s = this.settings;
     this.openOverlay('Settings', (c) => {
-      let grid = null;
-      const section = (title) => {
-        c.append(this.h('h3', { text: title }));
-        grid = this.h('div', { class: 'settings-grid' });
-        c.append(grid);
-      };
-      const save = () => { this.platform.saveSettings(); this.applySettingsClasses(); this.env.onSettingsChanged?.(); };
-      const slider = (label, key) => {
-        const input = this.h('input', {
-          type: 'range', min: '0', max: '1', step: '0.05', value: String(s[key] ?? 0.5),
-          'aria-label': label,
-          oninput: (e) => { s[key] = Number(e.target.value); this.env.audio.applyVolumes(); save(); },
-        });
-        grid.append(this.h('label', {}, label, input));
-      };
-      const toggle = (label, key) => {
-        const input = this.h('input', {
-          type: 'checkbox', ...(s[key] ? { checked: true } : {}),
-          onchange: (e) => { s[key] = e.target.checked; save(); },
-        });
-        grid.append(this.h('label', {}, label, input));
-      };
-      const select = (label, key, options) => {
-        const sel = this.h('select', { 'aria-label': label, onchange: (e) => { s[key] = e.target.value; save(); } },
-          options.map(([v, name]) => this.h('option', { value: v, ...(s[key] === v ? { selected: true } : {}), text: name })));
-        grid.append(this.h('label', {}, label, sel));
-      };
-
-      section('Audio');
-      slider('Music', 'volMusic');
-      slider('Effects', 'volEffects');
-      slider('Ambience', 'volAmbience');
-      slider('Voice', 'volVoice');
-      toggle('Mute all', 'muted');
-      toggle('Captions for audio cues', 'captions');
-
-      section('Display');
-      select('Theme', 'theme', THEMES.map((t) => [t.id, t.name]));
-      select('Camera', 'cameraTilt', [['standard', 'Standard'], ['low', 'Low'], ['overhead', 'Overhead']]);
-      toggle('Reduced motion', 'reducedMotion');
-      toggle('High contrast', 'highContrast');
-      select('Color-vision palette', 'palette', [['default', 'Default'], ['deuteranopia', 'Deuteranopia-safe'], ['protanopia', 'Protanopia-safe'], ['tritanopia', 'Tritanopia-safe']]);
-
+      const before = this.h('div', { class: 'settings-box' });
       const gfx = this.h('section', { id: 'gfx-section', class: 'gfx-section' });
-      c.append(gfx);
-      this.buildGraphicsSection(gfx, save);
-
-      section('Controls & access');
-      toggle('Larger text', 'largeText');
-      toggle('Left-handed controls', 'leftHanded');
-      toggle('Hold to confirm scoring', 'holdToConfirm');
-      toggle('Timing assistance', 'timingAssist');
-      toggle('Haptics', 'haptics');
-
-      c.append(this.h('div', { class: 'btn-row', style: 'margin-top:0.8rem' },
-        this.h('button', {
-          type: 'button', class: 'btn', text: 'Replay tutorials',
-          onclick: () => { s.tutorialsDone = {}; save(); this.toast('Tutorials reset'); },
-        })));
+      const gfxInner = this.h('div', { class: 'gfx-inner' });
+      gfx.append(gfxInner);
+      const after = this.h('div', { class: 'settings-box' });
+      c.append(before, gfx, after);
+      const save = () => { this.platform.saveSettings(); this.applySettingsClasses(); this.env.onSettingsChanged?.(); };
+      this._settingsParts = { root: c, before, gfxInner, after, save };
+      this.renderSettingsParts();
     }, { onClose });
+  }
+
+  renderSettingsParts() {
+    const { before, gfxInner, after, save } = this._settingsParts;
+    const s = this.settings;
+    let box = before;
+    let grid = null;
+    const section = (title) => {
+      box.append(this.h('h3', { text: title }));
+      grid = this.h('div', { class: 'settings-grid' });
+      box.append(grid);
+    };
+    const slider = (label, key) => {
+      const input = this.h('input', {
+        type: 'range', min: '0', max: '1', step: '0.05', value: String(s[key] ?? 0.5),
+        'aria-label': label,
+        oninput: (e) => { s[key] = Number(e.target.value); this.env.audio.applyVolumes(); save(); },
+      });
+      grid.append(this.h('label', {}, label, input));
+    };
+    const toggle = (label, key) => {
+      const input = this.h('input', {
+        type: 'checkbox', ...(s[key] ? { checked: true } : {}),
+        onchange: (e) => { s[key] = e.target.checked; save(); },
+      });
+      grid.append(this.h('label', {}, label, input));
+    };
+    const select = (label, key, options) => {
+      const sel = this.h('select', { 'aria-label': label, onchange: (e) => { s[key] = e.target.value; save(); } },
+        options.map(([v, name]) => this.h('option', { value: v, ...(s[key] === v ? { selected: true } : {}), text: name })));
+      grid.append(this.h('label', {}, label, sel));
+    };
+
+    before.replaceChildren();
+    section(T('Audio'));
+    slider(T('Music'), 'volMusic');
+    slider(T('Effects'), 'volEffects');
+    slider(T('Ambience'), 'volAmbience');
+    slider(T('Voice'), 'volVoice');
+    toggle(T('Mute all'), 'muted');
+    toggle(T('Captions for audio cues'), 'captions');
+
+    section(T('Display'));
+    select(T('Theme'), 'theme', THEMES.map((t) => [t.id, T(t.name)]));
+    select(T('Camera'), 'cameraTilt', [['standard', T('Standard')], ['low', T('Low')], ['overhead', T('Overhead')]]);
+    toggle(T('Reduced motion'), 'reducedMotion');
+    toggle(T('High contrast'), 'highContrast');
+    select(T('Color-vision palette'), 'palette', [['default', T('Default')], ['deuteranopia', T('Deuteranopia-safe')], ['protanopia', T('Protanopia-safe')], ['tritanopia', T('Tritanopia-safe')]]);
+
+    this.buildGraphicsSection(gfxInner, save);
+
+    after.replaceChildren();
+    box = after;
+    section(T('Controls & access'));
+    toggle(T('Larger text'), 'largeText');
+    toggle(T('Left-handed controls'), 'leftHanded');
+    toggle(T('Hold to confirm scoring'), 'holdToConfirm');
+    toggle(T('Timing assistance'), 'timingAssist');
+    toggle(T('Haptics'), 'haptics');
+
+    after.append(this.h('div', { class: 'btn-row', style: 'margin-top:0.8rem' },
+      this.h('button', {
+        type: 'button', class: 'btn', text: T('Replay tutorials'),
+        onclick: () => { s.tutorialsDone = {}; save(); this.toast(T('Tutorials reset')); },
+      })));
   }
 
   // Graphics section (localized): quality preset, render scale, per-effect
@@ -425,6 +499,7 @@ export class UI {
   // Rebuilt in place after each change so "From preset (…)" labels follow.
   buildGraphicsSection(root, save) {
     const t = gfxStrings();
+    // Only the game's inner box is redrawn; game-options.js sections sit beside it.
     const s = this.settings;
     const saved = () => (s.graphics && typeof s.graphics === 'object' ? s.graphics : (s.graphics = {}));
     const renderer = this.env.getRenderer?.();
@@ -514,64 +589,67 @@ export class UI {
 
   // --- profile / leaderboards ---------------------------------------------------------
 
-  async showProfile() {
+  async showProfile(board = null) {
     const p = this.platform;
+    this._board = board;
     this.openOverlay('Profile & Scores', async (c) => {
       if (p.profile.account) {
         // Account identity: platform nickname, read-only (never usernames).
         c.append(this.h('div', { class: 'settings-grid' },
-          this.h('label', {}, 'Player', this.h('span', { text: p.profile.name }))));
+          this.h('label', {}, T('Player'), this.h('span', { text: p.profile.name }))));
       } else {
         const nameInput = this.h('input', {
-          type: 'text', value: p.profile.name, maxlength: '20', 'aria-label': 'Display name',
+          type: 'text', value: playerName(p.profile.name), maxlength: '20', 'aria-label': T('Display name'),
           onchange: (e) => {
             p.profile.name = e.target.value.trim() || 'Guest';
             p.saveProfile();
-            this.toast('Name saved');
+            this.toast(T('Name saved'));
           },
         });
-        c.append(this.h('div', { class: 'settings-grid' }, this.h('label', {}, 'Display name', nameInput)));
+        c.append(this.h('div', { class: 'settings-grid' }, this.h('label', {}, T('Display name'), nameInput)));
       }
-      c.append(this.h('p', { class: 'muted', text: p.profile.guest ? 'Guest profile — progress is stored on this device. Sign in from the host shell for durable cloud progress.' : 'Signed in with your account.' }));
+      c.append(this.h('p', { class: 'muted', text: p.profile.guest ? T('Guest profile — progress is stored on this device. Sign in from the host shell for durable cloud progress.') : T('Signed in with your account.') }));
       c.append(this.h('p', { class: 'muted', text: p.syncLabel() }));
 
       const t = p.progress.totals;
-      c.append(this.h('h3', { text: 'Lifetime' }));
-      c.append(this.h('p', { text: `${t.games} tables · ${t.wins} wins · ${t.points} total points · ${t.avalanches} avalanches · ${p.progress.streakDays.length} active days` }));
+      c.append(this.h('h3', { text: T('Lifetime') }));
+      c.append(this.h('p', { text: T('{games} tables · {wins} wins · {points} total points · {avalanches} avalanches · {days} active days', { games: t.games, wins: t.wins, points: t.points, avalanches: t.avalanches, days: p.progress.streakDays.length }) }));
 
-      c.append(this.h('h3', { text: 'Achievements' }));
+      c.append(this.h('h3', { text: T('Achievements') }));
       const ach = this.h('ul', { class: 'ach-list' });
       for (const a of ACHIEVEMENTS) {
         const got = p.progress.achievements[a.key];
         ach.append(this.h('li', { class: got ? '' : 'locked' },
-          this.h('div', { class: 'ach-name', text: `${got ? '🏆' : '○'} ${a.name}` }),
-          this.h('div', { class: 'muted', text: a.desc })));
+          this.h('div', { class: 'ach-name', text: `${got ? '🏆' : '○'} ${T(a.name)}` }),
+          this.h('div', { class: 'muted', text: T(a.desc) })));
       }
       c.append(ach);
 
-      c.append(this.h('h3', { text: 'Leaderboards' }));
-      const boardBox = this.h('div', {}, this.h('p', { class: 'muted', text: 'Loading…' }));
+      c.append(this.h('h3', { text: T('Leaderboards') }));
+      const boardBox = this.h('div', {}, this.h('p', { class: 'muted', text: T('Loading…') }));
       const loadBoard = async (board, label) => {
-        boardBox.replaceChildren(this.h('p', { class: 'muted', text: 'Loading…' }));
+        this._board = [board, label];
+        boardBox.replaceChildren(this.h('p', { class: 'muted', text: T('Loading…') }));
         const res = await p.leaderboard(board);
         const table = this.h('table', { class: 'results-table' },
-          this.h('tr', {}, this.h('th', { text: '#' }), this.h('th', { text: 'Player' }), this.h('th', { class: 'num', text: 'Score' })));
+          this.h('tr', {}, this.h('th', { text: '#' }), this.h('th', { text: T('Player') }), this.h('th', { class: 'num', text: T('Score') })));
         res.entries.slice(0, 10).forEach((e, i) => {
           table.append(this.h('tr', { class: e.me ? 'me' : '' },
             this.h('td', { text: String(i + 1) }),
-            this.h('td', { text: e.name }),
+            this.h('td', { text: playerName(e.name) }),
             this.h('td', { class: 'num', text: String(e.score) })));
         });
-        if (!res.entries.length) table.append(this.h('tr', {}, this.h('td', { colspan: '3', text: 'No entries yet — play a table!' })));
-        boardBox.replaceChildren(this.h('p', { class: 'muted', text: `${label} · ${res.label}` }), table);
+        if (!res.entries.length) table.append(this.h('tr', {}, this.h('td', { colspan: '3', text: T('No entries yet — play a table!') })));
+        boardBox.replaceChildren(this.h('p', { class: 'muted', text: `${T(label)} · ${T(res.label)}` }), table);
       };
       const tabs = this.h('div', { class: 'btn-row' },
-        this.h('button', { type: 'button', class: 'btn', text: 'Daily', onclick: () => loadBoard('daily', 'Daily tables') }),
-        this.h('button', { type: 'button', class: 'btn', text: 'Challenge', onclick: () => loadBoard('challenge', 'Challenge tables') }),
-        this.h('button', { type: 'button', class: 'btn', text: 'Journey wins', onclick: () => loadBoard('journey', 'Journey wins') }));
+        this.h('button', { type: 'button', class: 'btn', text: T('Daily'), onclick: () => loadBoard('daily', N('Daily tables')) }),
+        this.h('button', { type: 'button', class: 'btn', text: T('Challenge'), onclick: () => loadBoard('challenge', N('Challenge tables')) }),
+        this.h('button', { type: 'button', class: 'btn', text: T('Journey wins'), onclick: () => loadBoard('journey', N('Journey wins')) }));
       c.append(tabs, boardBox);
-      loadBoard('daily', 'Daily tables');
+      loadBoard(...(this._board || ['daily', N('Daily tables')]));
     });
+    this._reopen = () => this.showProfile(this._board);
   }
 
   // --- HUD ------------------------------------------------------------------------------
@@ -602,7 +680,10 @@ export class UI {
     const filled = Object.values(left).filter((v) => v != null).length;
     const total = Object.keys(left).length;
     // Turn-critical facts come first so a narrow status line never truncates them.
-    let status = `${me.name}${me.isAI ? ' (AI)' : ''} to act · rolls left ${st.rollsLeft} · round ${st.round} — ${def.name}`;
+    const vars = { name: playerName(me.name), rolls: st.rollsLeft, round: st.round, table: this.defTitle(def) };
+    let status = me.isAI ? T('{name} (AI) to act · rolls left {rolls} · round {round} — {table}', vars)
+      : me.name === 'You' ? T('Your turn · rolls left {rolls} · round {round} — {table}', vars)
+        : T('{name} to act · rolls left {rolls} · round {round} — {table}', vars);
     if (st.limits.totalMs != null) {
       const remain = Math.max(0, st.limits.totalMs - this.session.nowMs());
       status += ` · ⏱ ${Math.floor(remain / 60000)}:${String(Math.floor(remain / 1000) % 60).padStart(2, '0')}`;
@@ -617,10 +698,10 @@ export class UI {
     const step = this.session.currentLessonStep();
     const banner = this._els['lesson-banner'];
     if (step) {
-      banner.textContent = step.text;
+      banner.textContent = T(step.text);
       banner.hidden = false;
     } else if (this.session.machine === 'tutorial' && !step) {
-      banner.textContent = 'Lesson complete — finish the table!';
+      banner.textContent = T('Lesson complete — finish the table!');
     } else {
       banner.hidden = true;
     }
@@ -634,21 +715,21 @@ export class UI {
     const scoreable = new Set(legal.scoreable);
 
     const table = this.h('table', { class: 'scorecard' });
-    table.append(this.h('caption', { text: `${me.name}'s card — ${filled}/${total} filled` }));
+    table.append(this.h('caption', { text: me.name === 'You' ? T('Your card — {filled}/{total} filled', { filled, total }) : T("{name}'s card — {filled}/{total} filled", { name: playerName(me.name), filled, total }) }));
     let section = null;
     for (const cat of CATEGORIES) {
       if (st.disabledCategories.includes(cat.id)) continue;
       if (cat.section !== section) {
         section = cat.section;
         table.append(this.h('tr', { class: 'section-head' },
-          this.h('th', { colspan: '2', text: section === 'upper' ? 'Upper — face totals' : 'Lower — hands' })));
+          this.h('th', { colspan: '2', text: section === 'upper' ? T('Upper — face totals') : T('Lower — hands') })));
       }
       const closed = me.scores[cat.id];
       const tr = this.h('tr', { class: closed != null ? 'row-closed' : '' });
       const isLegal = canScore && scoreable.has(cat.id);
       const tdBtn = this.h('td', {});
       if (closed != null) {
-        tdBtn.append(this.h('span', { text: cat.name }));
+        tdBtn.append(this.h('span', { text: T(cat.name) }));
         tr.append(tdBtn, this.h('td', { class: 'closed-val', text: String(closed) }));
       } else {
         const pv = previews[cat.id];
@@ -656,12 +737,13 @@ export class UI {
           type: 'button', class: `cat${isLegal ? ' legal' : ''}`,
           disabled: !isLegal,
           'aria-label': isLegal
-            ? `Score ${cat.name} for ${pv} points`
-            : `${cat.name} — ${cat.desc}${st.hasRolled ? '' : ' (roll first)'}`,
-          title: cat.desc,
+            ? T('Score {cat} for {n} points', { cat: T(cat.name), n: pv })
+            : `${T(cat.name)} — ${T(cat.desc)}${st.hasRolled ? '' : ' ' + T('(roll first)')}`,
+          title: T(cat.desc),
+          'data-cat': cat.id,
           onclick: () => this.env.tryScore(cat.id),
         },
-          this.h('span', { class: 'nm', text: cat.name }),
+          this.h('span', { class: 'nm', text: T(cat.name) }),
           this.h('span', { class: 'pv', text: pv != null ? String(pv) : '·' }));
         tdBtn.append(btn);
         tr.append(tdBtn, this.h('td', { class: 'points', text: pv != null && !isLegal ? String(pv) : '' }));
@@ -670,13 +752,13 @@ export class UI {
     }
     const b = totalsBreakdown(me.scores);
     table.append(this.h('tr', { class: 'totals' },
-      this.h('td', { text: `Upper ${b.upper} · Bonus ${b.bonus} · Lower ${b.lower}` }),
+      this.h('td', { text: T('Upper {upper} · Bonus {bonus} · Lower {lower}', b) }),
       this.h('td', { class: 'points', text: `Σ ${b.grand}` })));
     rail.append(table);
     const up = upperProgress(me.scores);
     rail.append(this.h('p', {
       class: 'bonus-meter',
-      text: b.bonus ? `Lodge bonus earned (+${UPPER_BONUS})` : `Upper bonus: ${up}/${UPPER_BONUS_THRESHOLD}`,
+      text: b.bonus ? T('Lodge bonus earned (+{n})', { n: UPPER_BONUS }) : T('Upper bonus: {n}/{target}', { n: up, target: UPPER_BONUS_THRESHOLD }),
     }));
   }
 
@@ -684,19 +766,19 @@ export class UI {
     const rail = this._els['rail-right'];
     rail.replaceChildren();
     const sec = this.h('section', {});
-    sec.append(this.h('h2', { text: 'Table' }));
+    sec.append(this.h('h2', { text: T('Table') }));
     const ul = this.h('ul', { class: 'player-list' });
     st.players.forEach((pl, i) => {
       const b = totalsBreakdown(pl.scores);
       ul.append(this.h('li', { class: i === st.current ? 'current' : '' },
-        this.h('span', { class: 'pl-name', text: pl.name + (pl.isAI ? ' 🤖' : '') }),
+        this.h('span', { class: 'pl-name', text: playerName(pl.name) + (pl.isAI ? ' 🤖' : '') }),
         this.h('span', { class: 'pl-score', text: String(b.grand) })));
     });
     sec.append(ul);
     rail.append(sec);
 
     const acts = this.h('section', {});
-    acts.append(this.h('h2', { text: 'Actions' }));
+    acts.append(this.h('h2', { text: T('Actions') }));
     const stack = this.h('div', { class: 'actions-stack' });
     this.buildActionButtons(stack, st);
     acts.append(stack);
@@ -710,26 +792,26 @@ export class UI {
     const rollBtn = this.h('button', {
       type: 'button', class: 'btn primary', id: 'btn-roll',
       disabled: !canRoll,
-      'aria-label': canRoll ? `Roll dice (${st.rollsLeft} left)` : 'Roll dice (unavailable)',
-      text: `🎲 Roll (${st.rollsLeft})`,
+      'aria-label': canRoll ? T('Roll dice ({n} left)', { n: st.rollsLeft }) : T('Roll dice (unavailable)'),
+      text: `🎲 ${T('Roll ({n})', { n: st.rollsLeft })}`,
       onclick: () => this.env.tryRoll(),
     });
     container.append(rollBtn);
     container.append(this.h('button', {
-      type: 'button', class: 'btn', text: 'Hint', disabled: !humanTurn || !this.session.def?.assists?.hints,
+      type: 'button', class: 'btn', text: T('Hint'), disabled: !humanTurn || !this.session.def?.assists?.hints,
       onclick: () => this.env.tryHint(),
     }));
     container.append(this.h('button', {
-      type: 'button', class: 'btn', text: 'Undo turn', disabled: !this.session.undoAllowed(),
+      type: 'button', class: 'btn', text: T('Undo turn'), disabled: !this.session.undoAllowed(),
       onclick: () => this.env.tryUndo(),
     }));
     container.append(this.h('button', {
-      type: 'button', class: 'btn tray-secondary', text: 'Pause',
+      type: 'button', class: 'btn tray-secondary', text: T('Pause'),
       onclick: () => this.togglePause(),
     }));
     container.append(this.h('button', {
-      type: 'button', class: 'btn danger tray-secondary', text: 'Leave table',
-      onclick: () => this.confirm('Leave this table? The round will be recorded as a forfeit.', () => this.env.giveUp()),
+      type: 'button', class: 'btn danger tray-secondary', text: T('Leave table'),
+      onclick: () => this.confirm(() => T('Leave this table? The round will be recorded as a forfeit.'), () => this.env.giveUp()),
     }));
   }
 
@@ -743,9 +825,11 @@ export class UI {
       const btn = this.h('button', {
         type: 'button', class: `die-btn${held ? ' held' : ''}`,
         disabled: !canHold || v === 0,
-        'aria-label': v === 0 ? `Die ${i + 1}, not rolled` : `Die ${i + 1}, showing ${v}${held ? ', held' : ''}. ${canHold ? (held ? 'Activate to release' : 'Activate to hold') : ''}`,
+        'aria-label': v === 0 ? T('Die {n}, not rolled', { n: i + 1 })
+          : `${T(held ? 'Die {n}, showing {v}, held.' : 'Die {n}, showing {v}.', { n: i + 1, v })} ${canHold ? (held ? T('Activate to release') : T('Activate to hold')) : ''}`.trim(),
         'aria-pressed': held ? 'true' : 'false',
         'data-die': String(i),
+        'data-held': T('HELD'),
         onclick: () => this.env.tryHold(i),
       }, this.h('span', { class: 'pip', text: v > 0 ? PIP_GLYPHS[v - 1] : '–' }));
       tray.append(btn);
@@ -776,16 +860,20 @@ export class UI {
       const list = this.h('ul', { class: 'menu-list' });
       const add = (label, fn, primary = false) => list.append(this.h('li', {},
         this.h('button', { type: 'button', class: `btn${primary ? ' primary' : ''}`, text: label, onclick: fn })));
-      add('Resume', () => { this.closeOverlay(); this.session.resume(); }, true);
-      add('Settings', () => this.showSettings());
-      add('Help', () => this.showHelp());
-      add('Leave table', () => this.confirm('Forfeit this table?', () => { this.closeOverlay(); this.env.giveUp(); }));
+      add(T('Resume'), () => { this.closeOverlay(); this.session.resume(); }, true);
+      add(T('Settings'), () => this.showSettings());
+      add(T('Help'), () => this.showHelp());
+      add(T('Leave table'), () => this.confirm(() => T('Forfeit this table?'), () => { this.closeOverlay(); this.env.giveUp(); }));
       c.append(list);
     });
+    this._reopen = () => this.showPause();
   }
 
-  showResults(record, outcome) {
+  // `again` re-renders an open results card in a new language without
+  // re-posting the score or repeating the announcement.
+  showResults(record, outcome, again = false) {
     this.setHudVisible(false);
+    if (!again) this._lb = null;
     const won = record.status === 'won';
     const b = record.score;
     this.openOverlay('Results', (c) => {
@@ -796,20 +884,24 @@ export class UI {
       });
       art.addEventListener('error', () => art.remove());
       c.append(art);
-      c.append(this.h('h2', { text: won ? '🏔 You take the table!' : record.reason === 'gave-up' ? 'Table forfeited' : record.reason === 'time-limit' ? '⏱ The blizzard wins' : 'The lodge keeps its crown' }));
-      c.append(this.h('p', { text: `Your card: upper ${b.upper} + bonus ${b.bonus} + lower ${b.lower} = ${b.grand} points · ${record.invalid} invalid action${record.invalid === 1 ? '' : 's'} · ${(record.durationMs / 1000).toFixed(0)}s` }));
+      c.append(this.h('h2', { text: won ? '🏔 ' + T('You take the table!') : record.reason === 'gave-up' ? T('Table forfeited') : record.reason === 'time-limit' ? '⏱ ' + T('The blizzard wins') : T('The lodge keeps its crown') }));
+      const secs = (record.durationMs / 1000).toFixed(0);
+      c.append(this.h('p', { text: T(record.invalid === 1
+        ? 'Your card: upper {upper} + bonus {bonus} + lower {lower} = {grand} points · {invalid} invalid action · {secs}s'
+        : 'Your card: upper {upper} + bonus {bonus} + lower {lower} = {grand} points · {invalid} invalid actions · {secs}s',
+      { upper: b.upper, bonus: b.bonus, lower: b.lower, grand: b.grand, invalid: record.invalid, secs }) }));
       if (this.session.def?.par?.score) {
-        c.append(this.h('p', { class: 'muted', text: `Par for this table: ${this.session.def.par.score}` }));
+        c.append(this.h('p', { class: 'muted', text: T('Par for this table: {n}', { n: this.session.def.par.score }) }));
       }
       const table = this.h('table', { class: 'results-table' });
       table.append(this.h('tr', {},
-        this.h('th', { text: '#' }), this.h('th', { text: 'Player' }),
-        this.h('th', { class: 'num', text: 'Upper' }), this.h('th', { class: 'num', text: 'Bonus' }),
-        this.h('th', { class: 'num', text: 'Lower' }), this.h('th', { class: 'num', text: 'Total' })));
+        this.h('th', { text: '#' }), this.h('th', { text: T('Player') }),
+        this.h('th', { class: 'num', text: T('Upper') }), this.h('th', { class: 'num', text: T('Bonus') }),
+        this.h('th', { class: 'num', text: T('Lower') }), this.h('th', { class: 'num', text: T('Total') })));
       record.rankings.forEach((r, i) => {
         table.append(this.h('tr', { class: r.player === 0 ? 'me' : '' },
           this.h('td', { text: String(i + 1) }),
-          this.h('td', { text: r.name }),
+          this.h('td', { text: playerName(r.name) }),
           this.h('td', { class: 'num', text: String(r.upper ?? '') }),
           this.h('td', { class: 'num', text: String(r.bonus ?? '') }),
           this.h('td', { class: 'num', text: String(r.lower ?? '') }),
@@ -819,23 +911,31 @@ export class UI {
 
       if (record.mode !== 'learn' && record.reason !== 'gave-up' && this.platform.hosted) {
         // StarHermit high-score board: the finished card's grand total.
-        const ps = platformStrings();
-        const lb = this.h('p', { class: 'muted lb-line', text: ps.lbPosting });
+        const lbText = () => {
+          const ps = platformStrings();
+          const r = this._lb;
+          return !r ? ps.lbPosting : !r.posted ? ps.lbNotPosted
+            : r.rank ? ps.lbRank.replace('{rank}', r.rank) : ps.lbPosted;
+        };
+        const lb = this.h('p', { class: 'muted lb-line', text: lbText() });
         lb.setAttribute('aria-live', 'polite');
         c.append(lb);
-        this.platform.submitScore(b.grand).then((r) => {
-          lb.textContent = !r.posted ? ps.lbNotPosted
-            : r.rank ? ps.lbRank.replace('{rank}', r.rank) : ps.lbPosted;
-        });
+        if (!again) {
+          this.platform.submitScore(b.grand).then((r) => {
+            this._lb = r;
+            if (lb.isConnected) lb.textContent = lbText();
+            else if (this.overlayKind === 'Results') this.overlay.querySelector('.lb-line')?.replaceChildren(lbText());
+          });
+        }
       }
 
       const newly = this.platform.lastAchievements || [];
       if (newly.length) {
-        c.append(this.h('h3', { text: 'Achievements unlocked' }));
+        c.append(this.h('h3', { text: T('Achievements unlocked') }));
         const ul = this.h('ul', { class: 'ach-list' });
         for (const key of newly) {
           const meta = ACHIEVEMENTS.find((a) => a.key === key);
-          if (meta) ul.append(this.h('li', {}, this.h('div', { class: 'ach-name', text: `🏆 ${meta.name}` }), this.h('div', { class: 'muted', text: meta.desc })));
+          if (meta) ul.append(this.h('li', {}, this.h('div', { class: 'ach-name', text: `🏆 ${T(meta.name)}` }), this.h('div', { class: 'muted', text: T(meta.desc) })));
         }
         c.append(ul);
       }
@@ -848,20 +948,23 @@ export class UI {
       let recommended = false;
       if (def.mode === 'journey' && won) {
         const next = JOURNEY.find((j) => j.stage === def.stage + 1);
-        if (next) { add(`Next: ${next.name}`, () => this.env.startContent(next), true); recommended = true; }
+        if (next) { add(T('Next: {name}', { name: this.defTitle(next) }), () => this.env.startContent(next), true); recommended = true; }
       }
-      add('Play again', () => this.env.startContent(def.mode === 'practice' ? practiceDef({ difficulty: def.id.split('-')[1] || 'hearth' }) : def), !recommended);
-      add('Back to title', () => this.showTitle());
+      add(T('Play again'), () => this.env.startContent(def.mode === 'practice' ? practiceDef({ difficulty: def.id.split('-')[1] || 'hearth' }) : def), !recommended);
+      add(T('Back to title'), () => this.showTitle());
       c.append(list);
     }, { dismissible: false });
-    this.announce(won ? `You won with ${b.grand} points` : `Table over. You scored ${b.grand} points`, true);
+    this._reopen = () => this.showResults(record, outcome, true);
+    if (!again) this.announce(won ? T('You won with {n} points', { n: b.grand }) : T('Table over. You scored {n} points', { n: b.grand }), true);
   }
 
   // --- compatibility ----------------------------------------------------------------------
 
-  showCompatibility(msg) {
+  // `key` is an English source string; it re-renders on a language change.
+  showCompatibility(key) {
+    this._compat = key;
     const el = this._els['compat-message'];
-    el.textContent = msg;
+    el.textContent = T(key);
     el.hidden = false;
   }
 
@@ -876,19 +979,23 @@ export class UI {
         this.closeOverlay();
         this.setHudVisible(true);
         this.updateHUD();
-        this.announce(`${e.def.name}. ${currentPlayer(e.state).name} to act.`);
+        this.announce(currentPlayer(e.state).name === 'You' ? T('{table}. Your turn.', { table: this.defTitle(e.def) })
+          : T('{table}. {name} to act.', { table: this.defTitle(e.def), name: playerName(currentPlayer(e.state).name) }));
         break;
       case 'game-event': {
         const ev = e.event;
         if (ev.type === 'score') {
           const cat = getCategory(ev.category);
-          this.announce(`${e.state.players[ev.player].name} scored ${ev.points} on ${cat?.name ?? ev.category}`);
+          const who = e.state.players[ev.player].name;
+          const vars = { name: playerName(who), n: ev.points, cat: cat ? T(cat.name) : ev.category };
+          this.announce(who === 'You' ? T('You scored {n} on {cat}', vars) : T('{name} scored {n} on {cat}', vars));
           if (this.settings.haptics && navigator.vibrate && ev.player === 0) navigator.vibrate(30);
         } else if (ev.type === 'invalid') {
-          this.announce(`Invalid action: ${invalidText(ev.reason)}`, true);
+          this.announce(T('Invalid action: {reason}', { reason: invalidText(ev.reason) }), true);
           this.toast(invalidText(ev.reason));
         } else if (ev.type === 'turn') {
-          this.announce(`${e.state.players[ev.player].name}'s turn`);
+          const who = e.state.players[ev.player].name;
+          this.announce(who === 'You' ? T('Your turn') : T("{name}'s turn", { name: playerName(who) }));
         } else if (ev.type === 'roll') {
           if (this.settings.haptics && navigator.vibrate && ev.player === 0) navigator.vibrate(12);
         }
@@ -899,30 +1006,38 @@ export class UI {
         this.announce(invalidText(e.reason), true);
         this.toast(invalidText(e.reason));
         break;
-      case 'lesson-blocked':
-        this.toast(e.message);
+      case 'lesson-blocked': {
+        const step = this.session.currentLessonStep();
+        this.toast(step ? T('Follow the lesson: {text}', { text: T(step.text) }) : e.message);
         break;
+      }
       case 'lesson-step':
         if (e.done) {
           this.settings.tutorialsDone[this.session.def.id] = true;
           this.platform.saveSettings();
           this.env.audio.lessonComplete();
-          this.toast('Lesson complete — finish the table!');
+          this.toast(T('Lesson complete — finish the table!'));
         }
         this.updateHUD();
         break;
-      case 'hint':
-        this.toast(e.reason || 'Try the highlighted option');
-        this.announce(e.reason || 'Hint shown');
+      case 'hint': {
+        const text = hintText(e);
+        this.toast(text || T('Try the highlighted option'));
+        this.announce(text || T('Hint shown'));
         break;
+      }
       case 'undo':
-        this.toast('Turn restored');
+        this.toast(T('Turn restored'));
         this.updateHUD();
         break;
-      case 'while-away':
-        this.toast(e.summary, 5000);
-        this.announce(e.summary);
+      case 'while-away': {
+        const summary = !e.away ? e.summary : e.away.name === 'You'
+          ? T('Table restored. You were away {min} min; round {round}, your turn.', e.away)
+          : T('Table restored. You were away {min} min; round {round}, {name} to act.', { ...e.away, name: playerName(e.away.name) });
+        this.toast(summary, 5000);
+        this.announce(summary);
         break;
+      }
       default:
         break;
     }
@@ -1012,12 +1127,19 @@ export class UI {
 
 function invalidText(reason) {
   const TEXT = {
-    'no-rolls-left': 'No rolls left — choose a category to score.',
-    'must-roll-first': 'Roll the dice first.',
-    'category-closed': 'That category is already filled.',
-    'category-disabled': 'That category is closed at this table.',
-    'unknown-category': 'Unknown category.',
-    'round-over': 'The table is over.',
+    'no-rolls-left': N('No rolls left — choose a category to score.'),
+    'must-roll-first': N('Roll the dice first.'),
+    'category-closed': N('That category is already filled.'),
+    'category-disabled': N('That category is closed at this table.'),
+    'unknown-category': N('Unknown category.'),
+    'round-over': N('The table is over.'),
   };
-  return TEXT[reason] || `Action not allowed (${reason}).`;
+  return TEXT[reason] ? T(TEXT[reason]) : T('Action not allowed ({reason}).', { reason });
+}
+
+// Hint text from the rules engine's structured hint (key + values).
+function hintText(h) {
+  if (!h.reasonKey) return h.reason;
+  const cat = h.category ? getCategory(h.category) : null;
+  return T(h.reasonKey, { cat: cat ? T(cat.name) : '', n: h.points });
 }

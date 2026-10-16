@@ -325,6 +325,7 @@ export class Session {
         type: 'while-away',
         summary: `Table restored. You were away ${Math.max(1, Math.round(awayMs / 60000))} min; ` +
           `round ${this.state.round}, ${currentPlayer(this.state).name} to act.`,
+        away: { min: Math.max(1, Math.round(awayMs / 60000)), round: this.state.round, name: currentPlayer(this.state).name },
       });
       return snap;
     } catch {
