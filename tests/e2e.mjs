@@ -155,6 +155,8 @@ async function playPass(browser, base, { tag, viewport, mobile }) {
       if (await presetAttr() !== 'low') throw new Error('auto did not resolve to low: ' + await presetAttr());
       const autoLabel = await page.locator('#gfx-preset option[value="auto"]').textContent();
       if (!/Auto \(detected: Low\)/.test(autoLabel)) throw new Error('auto label: ' + autoLabel);
+      // The summary names the StarHermit hardware level (software GPU = level 0).
+      if (!/Level 0/.test(await page.textContent('#gfx-summary'))) throw new Error('summary lacks the hardware level: ' + await page.textContent('#gfx-summary'));
       await page.selectOption('#gfx-preset', 'low');
       await page.waitForFunction(() => document.body.dataset.gfxPreset === 'low');
       await page.selectOption('#gfx-preset', 'ultra');

@@ -18,7 +18,7 @@ import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { createStream, DICE_COUNT } from './rules.js';
-import { detectPreset, resolve, SHADOW_MAP, PARTICLES } from './gfx.js';
+import { detectLevel, presetForLevel, resolve, SHADOW_MAP, emberCount } from './gfx.js';
 
 // Authored framing constants (no magic offsets scattered in code).
 export const CAMERA_PRESETS = {
@@ -97,9 +97,11 @@ function canvasTex(size, draw, { repeat = null, srgb = true } = {}) {
 }
 
 // Near-white detail maps: they multiply the theme colour, so themes still tint.
-function feltTexture() {
+// Texture size n is the preset budget's `texture` (authored at 256 px; px constants scale with k).
+function feltTexture(n = 256) {
   const r = createStream('decor:tex:felt');
-  return canvasTex([256, 256], (g, w, h) => {
+  return canvasTex([n, n], (g, w, h) => {
+    const k = w / 256;
     const img = g.createImageData(w, h);
     for (let i = 0; i < w * h; i++) {
       const v = 228 + r.next() * 27;
@@ -109,16 +111,18 @@ function feltTexture() {
     g.putImageData(img, 0, 0);
     g.globalAlpha = 0.08;
     g.strokeStyle = '#000';
-    for (let i = 0; i < 500; i++) { // fibres
+    g.lineWidth = k;
+    for (let i = 0; i < Math.round(500 * k * k); i++) { // fibres
       const x = r.next() * w, y = r.next() * h, a = r.next() * Math.PI;
-      g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * 5, y + Math.sin(a) * 5); g.stroke();
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * 5 * k, y + Math.sin(a) * 5 * k); g.stroke();
     }
   }, { repeat: [5, 5] });
 }
 
-function woodTexture(seed = 'wood', planks = 1) {
+function woodTexture(seed = 'wood', planks = 1, n = 256) {
   const r = createStream(`decor:tex:${seed}`);
-  return canvasTex([256, 256], (g, w, h) => {
+  return canvasTex([n, n], (g, w, h) => {
+    const k = w / 256;
     g.fillStyle = '#f2f2f2'; g.fillRect(0, 0, w, h);
     const ph = h / planks;
     for (let p = 0; p < planks; p++) {
@@ -126,31 +130,32 @@ function woodTexture(seed = 'wood', planks = 1) {
       g.fillStyle = `rgb(${shade},${shade},${shade})`;
       g.fillRect(0, p * ph, w, ph);
       for (let i = 0; i < 26; i++) { // grain lines
-        const y0 = p * ph + r.next() * ph, amp = 1 + r.next() * 3, f = 0.01 + r.next() * 0.03;
+        const y0 = p * ph + r.next() * ph, amp = (1 + r.next() * 3) * k, f = (0.01 + r.next() * 0.03) / k;
         g.strokeStyle = `rgba(60,40,20,${0.08 + r.next() * 0.14})`;
-        g.lineWidth = 0.6 + r.next() * 1.4;
+        g.lineWidth = (0.6 + r.next() * 1.4) * k;
         g.beginPath();
-        for (let x = 0; x <= w; x += 8) g.lineTo(x, y0 + Math.sin(x * f + i) * amp);
+        for (let x = 0; x <= w; x += 8 * k) g.lineTo(x, y0 + Math.sin(x * f + i) * amp);
         g.stroke();
       }
-      if (planks > 1) { g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(0, p * ph, w, 2); }
+      if (planks > 1) { g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(0, p * ph, w, 2 * k); }
     }
   }, { repeat: [planks > 1 ? 3 : 8, 1] });
 }
 
-function stoneTexture() {
+function stoneTexture(n = 256) {
   const r = createStream('decor:tex:stone');
-  return canvasTex([256, 256], (g, w, h) => {
+  return canvasTex([n, n], (g, w, h) => {
+    const k = w / 256;
     g.fillStyle = '#6a6a6a'; g.fillRect(0, 0, w, h);
     const rows = 6, rh = h / rows;
     for (let row = 0; row < rows; row++) {
-      let x = -r.next() * 40;
+      let x = -r.next() * 40 * k;
       while (x < w) {
-        const sw = 34 + r.next() * 40;
+        const sw = (34 + r.next() * 40) * k;
         const v = 175 + r.next() * 70;
         g.fillStyle = `rgb(${v},${v - 4},${v - 10})`;
         g.beginPath();
-        g.roundRect(x + 3, row * rh + 3, sw - 6, rh - 6, 9);
+        g.roundRect(x + 3 * k, row * rh + 3 * k, sw - 6 * k, rh - 6 * k, 9 * k);
         g.fill();
         x += sw;
       }
@@ -200,6 +205,37 @@ function trayTexture() {
   });
 }
 
+// Round-geometry LOD: radial segments scaled by the preset budget (at least 6).
+function seg(n, k) { return Math.max(6, Math.round(n * (k || 1))); }
+
+// Window star scatter (deterministic; the count is the preset budget's `stars`).
+function starGeometry(count) {
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(count * 3);
+  const r = createStream('decor:stars');
+  for (let i = 0; i < count; i++) {
+    pos[i * 3] = -3.2 + (r.next() - 0.5) * 3.1;
+    pos[i * 3 + 1] = 2.6 + (r.next() - 0.5) * 2.1;
+    pos[i * 3 + 2] = -7.42;
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  return geo;
+}
+
+// Run a post pass at a fraction of the frame (per-preset budget). EffectComposer sizes every pass to the
+// full frame in addPass/setSize, so the pass's own setSize is wrapped to apply the scale.
+function atScale(pass, k) {
+  if (!(k > 0 && k < 1)) return pass;
+  const setSize = pass.setSize.bind(pass);
+  pass.setSize = (w, h) => setSize(Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k)));
+  return pass;
+}
+
+// Lambert twin of a room/table material for the Low budget (same colour and maps, no PBR).
+function lambertTwin(m) {
+  return new THREE.MeshLambertMaterial({ color: m.color.clone(), map: m.map, bumpMap: m.bumpMap, bumpScale: m.bumpScale });
+}
+
 export class Renderer {
   constructor(canvas, settings, theme) {
     this.canvas = canvas;
@@ -225,6 +261,7 @@ export class Renderer {
     this.q = null;
     this.gpu = '';
     this.detected = 'balanced';
+    this.level = 4;             // StarHermit hardware level (0–20)
     this.composer = null;
     this.postKey = null;
     this.postFailed = false;
@@ -303,9 +340,12 @@ export class Renderer {
       gpu = String(ctx.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : ctx.RENDERER) || '');
     } catch { gpu = ''; }
     this.gpu = gpu;
-    const mobile = (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) ||
-      /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent || '');
-    this.detected = detectPreset(gpu, { mobile });
+    // StarHermit hardware level → Auto preset (SwiftShader = level 0 → Low; phones cap at Balanced).
+    const G = globalThis.StarHermitGpu;
+    const system = G ? G.detectSystem() : {};
+    const mobile = !!system.mobile || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent || '');
+    this.level = detectLevel(gpu, { ...system, mobile });
+    this.detected = presetForLevel(this.level);
   }
 
   rebuild() {
@@ -343,6 +383,11 @@ export class Renderer {
       mats.forEach(disposeMat);
     });
     (this.dieMatSets || []).flat().forEach(disposeMat);
+    for (const l of this.lambertOf?.values() || []) l.dispose();
+    this.lambertOf = null;
+    this.tex && Object.values(this.tex).forEach((t) => t.dispose());
+    this.tex = null;
+    this._texSize = this._pips = this._bevel = this._segments = this._stars = undefined;
     this.dieGeos?.box.dispose();
     this.dieGeos?.rounded.dispose();
     this.gl?.dispose();
@@ -363,24 +408,20 @@ export class Renderer {
     this.scene.fog = new THREE.Fog(0x000000, 14, 30);
     this.detailGroup = new THREE.Group(); // props shown only at "detailed"
     this.scene.add(this.detailGroup);
-    this.tex = {
-      felt: feltTexture(), wood: woodTexture('wood'), wall: woodTexture('logs', 7),
-      floor: woodTexture('floor', 5), stone: stoneTexture(),
-    };
-    this.tex.floor.repeat.set(6, 6);
+    this._buildTextures(256);
+    // Round geometry rebuilt per preset LOD (budget.segments): [mesh, segments → geometry].
+    this.lodMeshes = [];
 
     // Felt table top.
-    const feltGeo = new THREE.CylinderGeometry(3.4, 3.6, 0.32, 64);
     this.feltMat = new THREE.MeshStandardMaterial({ color: t.felt, roughness: 0.95, metalness: 0 });
-    const felt = new THREE.Mesh(feltGeo, this.feltMat);
+    const felt = this._lod(this.feltMat, (k) => new THREE.CylinderGeometry(3.4, 3.6, 0.32, seg(64, k)));
     felt.position.y = -0.16;
     felt.receiveShadow = true;
     this.scene.add(felt);
 
     // Wood rim.
-    const rimGeo = new THREE.TorusGeometry(3.5, 0.22, 16, 96);
     this.woodMat = new THREE.MeshStandardMaterial({ color: t.wood, roughness: 0.55, metalness: 0.05 });
-    const rim = new THREE.Mesh(rimGeo, this.woodMat);
+    const rim = this._lod(this.woodMat, (k) => new THREE.TorusGeometry(3.5, 0.22, seg(16, k), seg(96, k)));
     rim.rotation.x = Math.PI / 2;
     rim.position.y = 0.02;
     rim.receiveShadow = true;
@@ -389,19 +430,19 @@ export class Renderer {
 
     // Brass inlay just inside the rim (catches the lamp in reflections).
     this.brassMat = new THREE.MeshStandardMaterial({ color: 0xc9a060, roughness: 0.3, metalness: 1 });
-    const inlay = new THREE.Mesh(new THREE.TorusGeometry(3.27, 0.025, 8, 128), this.brassMat);
+    const inlay = this._lod(this.brassMat, (k) => new THREE.TorusGeometry(3.27, 0.025, seg(8, k), seg(128, k)));
     inlay.rotation.x = Math.PI / 2;
     inlay.position.y = 0.005;
     this.detailGroup.add(inlay);
 
     // Table pedestal.
-    const ped = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.5, 2.2, 32), this.woodMat);
+    const ped = this._lod(this.woodMat, (k) => new THREE.CylinderGeometry(1.1, 1.5, 2.2, seg(32, k)));
     ped.position.y = -1.45;
     this.scene.add(ped);
 
     // Room: floor + back wall, kept simple and warm.
     this.floorMat = new THREE.MeshStandardMaterial({ color: t.wall, roughness: 0.9 });
-    const floor = new THREE.Mesh(new THREE.CircleGeometry(16, 48), this.floorMat);
+    const floor = this._lod(this.floorMat, (k) => new THREE.CircleGeometry(16, seg(48, k)));
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = -2.56;
     floor.receiveShadow = true;
@@ -417,17 +458,9 @@ export class Renderer {
     const sky = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 2.4), this.skyMat);
     sky.position.set(-3.2, 2.6, -7.45);
     this.scene.add(sky);
-    const starGeo = new THREE.BufferGeometry();
-    const starPos = new Float32Array(60 * 3);
-    const starStream = createStream('decor:stars');
-    for (let i = 0; i < 60; i++) {
-      starPos[i * 3] = -3.2 + (starStream.next() - 0.5) * 3.1;
-      starPos[i * 3 + 1] = 2.6 + (starStream.next() - 0.5) * 2.1;
-      starPos[i * 3 + 2] = -7.42;
-    }
-    starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
     this.starMat = new THREE.PointsMaterial({ color: 0xf6f0ff, size: 0.035, sizeAttenuation: true, transparent: true, fog: false });
-    this.scene.add(new THREE.Points(starGeo, this.starMat));
+    this.starPoints = new THREE.Points(starGeometry(60), this.starMat);
+    this.scene.add(this.starPoints);
     // Detailed window: moon glow, mountain silhouette, timber frame and sill.
     const moon = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9),
       new THREE.MeshBasicMaterial({ map: glowTexture(), color: new THREE.Color(1.6, 1.55, 1.4), transparent: true, depthWrite: false, fog: false }));
@@ -463,6 +496,7 @@ export class Renderer {
     this.flame.position.set(FIRE_POS.x, FIRE_POS.y + 0.05, -7.4);
     this.scene.add(this.flame);
     this.stoneMat = new THREE.MeshStandardMaterial({ color: 0x5e554c, envMapIntensity: 0.1, roughness: 0.9, map: this.tex.stone, bumpMap: this.tex.stone, bumpScale: 3 });
+    this.envMats = [this.feltMat, this.woodMat, this.brassMat, this.floorMat, this.wallMat, this.frameMat, this.stoneMat];
     const stone = (w, h, x, y) => {
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.5), this.stoneMat);
       m.position.set(x, y, -7.3);
@@ -509,10 +543,98 @@ export class Renderer {
     this.scene.add(tray);
   }
 
+  // A mesh whose round geometry follows the preset LOD (budget.segments).
+  _lod(material, make) {
+    const mesh = new THREE.Mesh(make(1), material);
+    this.lodMeshes.push([mesh, make]);
+    return mesh;
+  }
+
+  // Procedural room textures at the preset budget's size (texture variant).
+  _buildTextures(n) {
+    const old = this.tex;
+    this.tex = {
+      felt: feltTexture(n), wood: woodTexture('wood', 1, n), wall: woodTexture('logs', 7, n),
+      floor: woodTexture('floor', 5, n), stone: stoneTexture(n),
+    };
+    this.tex.floor.repeat.set(6, 6);
+    this._texSize = n;
+    if (old) for (const t of Object.values(old)) t.dispose();
+    if (this.stoneMat) { this.stoneMat.map = this.tex.stone; this.stoneMat.bumpMap = this.tex.stone; }
+  }
+
+  // Apply the preset's asset variants: texture sizes, pip maps, die bevel, round-geometry LOD, stars and
+  // the room's material class. Only what changed is rebuilt.
+  _applyBudget(b) {
+    if (this._texSize !== b.texture) this._buildTextures(b.texture);
+    if (this._pips !== b.pips) { this._pips = b.pips; this._buildPipMaps(); }
+    if (this._bevel !== b.bevel) {
+      this._bevel = b.bevel;
+      const old = this.dieGeos.rounded;
+      this.dieGeos.rounded = new RoundedBoxGeometry(DIE_SIZE, DIE_SIZE, DIE_SIZE, b.bevel, 0.085);
+      old.dispose();
+    }
+    if (this._segments !== b.segments) {
+      this._segments = b.segments;
+      for (const [mesh, make] of this.lodMeshes) { mesh.geometry.dispose(); mesh.geometry = make(b.segments); }
+      const ring = new THREE.RingGeometry(DIE_SIZE * 0.62, DIE_SIZE * 0.78, seg(32, b.segments));
+      const oldRing = this.dice[0]?.marker.geometry;
+      for (const d of this.dice) d.marker.geometry = ring;
+      oldRing?.dispose();
+    }
+    if (this._stars !== b.stars) {
+      this._stars = b.stars;
+      this.starPoints.geometry.dispose();
+      this.starPoints.geometry = starGeometry(b.stars);
+    }
+    // Material class: Lambert twins on Low (cheapest lighting), MeshStandardMaterial above.
+    const lambert = b.material === 'lambert';
+    this.lambertOf = this.lambertOf || new Map();
+    const twin = (m) => {
+      if (!this.lambertOf.has(m)) this.lambertOf.set(m, lambertTwin(m));
+      const l = this.lambertOf.get(m);
+      l.color.copy(m.color); l.map = m.map; l.bumpMap = m.bumpMap; l.bumpScale = m.bumpScale; l.needsUpdate = true;
+      return l;
+    };
+    const std = new Map([...this.lambertOf].map(([m, l]) => [l, m]));
+    this.scene.traverse((o) => {
+      if (!o.isMesh || Array.isArray(o.material)) return;
+      const base = std.get(o.material) || o.material;
+      if (!this.envMats.includes(base)) return;
+      o.material = lambert ? twin(base) : base;
+    });
+  }
+
+  // Die-face colour and bump maps at the budget's pip texture size, for all three die material sets.
+  _buildPipMaps() {
+    for (let face = 1; face <= 6; face++) {
+      const idx = FACE_TEXTURE[face];
+      const bump = this.makePipTexture(face, true);
+      for (const set of [this.dieMatsBumped, this.dieMatsDetailed]) {
+        if (set[idx].bumpMap && set === this.dieMatsDetailed) set[idx].bumpMap.dispose();
+        set[idx].bumpMap = bump;
+        set[idx].needsUpdate = true;
+      }
+    }
+    this._applyPipColours();
+  }
+
+  _applyPipColours() {
+    for (let face = 1; face <= 6; face++) {
+      const idx = FACE_TEXTURE[face];
+      const map = this.makePipTexture(face);
+      const old = this.dieMatsPlain[idx].map;
+      for (const set of this.dieMatSets) { set[idx].map = map; set[idx].needsUpdate = true; }
+      old?.dispose();
+    }
+  }
+
   makePipTexture(faceValue, bump = false) {
     const c = document.createElement('canvas');
-    c.width = c.height = 128;
+    const n = this._pips || 128; // die-face texture size (preset budget), drawn in 128-px units
+    c.width = c.height = n;
     const g = c.getContext('2d');
+    g.scale(n / 128, n / 128);
     g.fillStyle = bump ? '#fff' : this.theme.die;
     g.fillRect(0, 0, 128, 128);
     const r = faceValue === 1 ? 15 : 11;
@@ -540,19 +662,24 @@ export class Renderer {
       box: new THREE.BoxGeometry(DIE_SIZE, DIE_SIZE, DIE_SIZE),
       rounded: new RoundedBoxGeometry(DIE_SIZE, DIE_SIZE, DIE_SIZE, 4, 0.085),
     };
-    // Two material sets: plain (standard, flat faces) and detailed
-    // (clearcoated physical material with recessed pips).
+    // Three material sets: plain (standard, flat faces), bumped (standard with recessed pips; detailed
+    // dice on Low/Balanced budgets) and detailed (clearcoated physical material, High/Ultra budgets).
     this.dieMatsPlain = [];
+    this.dieMatsBumped = [];
     this.dieMatsDetailed = [];
     for (let face = 1; face <= 6; face++) {
       const idx = FACE_TEXTURE[face];
+      const bump = this.makePipTexture(face, true);
       this.dieMatsPlain[idx] = new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.02 });
+      this.dieMatsBumped[idx] = new THREE.MeshStandardMaterial({
+        roughness: 0.38, metalness: 0, bumpMap: bump, bumpScale: 2.5, envMapIntensity: 0.3,
+      });
       this.dieMatsDetailed[idx] = new THREE.MeshPhysicalMaterial({
         roughness: 0.38, metalness: 0, clearcoat: 0.8, clearcoatRoughness: 0.22,
-        bumpMap: this.makePipTexture(face, true), bumpScale: 2.5, envMapIntensity: 0.3,
+        bumpMap: bump, bumpScale: 2.5, envMapIntensity: 0.3,
       });
     }
-    this.dieMatSets = [this.dieMatsPlain, this.dieMatsDetailed];
+    this.dieMatSets = [this.dieMatsPlain, this.dieMatsBumped, this.dieMatsDetailed];
     const markerGeo = new THREE.RingGeometry(DIE_SIZE * 0.62, DIE_SIZE * 0.78, 32);
     this.markerMat = new THREE.MeshBasicMaterial({
       color: this.theme.select, transparent: true, opacity: 0.9, depthWrite: false,
@@ -629,15 +756,9 @@ export class Renderer {
     this.fireGlowMat.color.set(theme.accent).lerp(new THREE.Color(0xffa040), 0.5).multiplyScalar(2.2);
     this.markerMat.color.set(theme.select);
     this.trayMat.color.set(theme.select);
-    for (let face = 1; face <= 6; face++) {
-      const idx = FACE_TEXTURE[face];
-      this.dieMatsPlain[idx].map?.dispose();
-      this.dieMatsDetailed[idx].map?.dispose();
-      this.dieMatsPlain[idx].map = this.makePipTexture(face);
-      this.dieMatsDetailed[idx].map = this.makePipTexture(face);
-      this.dieMatsPlain[idx].needsUpdate = true;
-      this.dieMatsDetailed[idx].needsUpdate = true;
-    }
+    this._applyPipColours();
+    // Lambert twins (Low budget) follow the theme colours on the next frame's swap.
+    if (this.lambertOf) for (const [m, l] of this.lambertOf) l.color.copy(m.color);
   }
 
   /** Apply saved graphics settings (settings.graphics object; {} = Auto). Live, no reload. */
@@ -645,9 +766,10 @@ export class Renderer {
     const json = JSON.stringify(saved || {});
     if (json === this._gfxJson && this.q) return; // unrelated settings changed
     this._gfxJson = json;
-    const g = resolve(saved || {}, this.detected);
+    const g = resolve(saved || {}, this.detected, this.level);
     this.q = g;
     if (!this.gl) return;
+    this._applyBudget(g.budget);
     document.body.dataset.gfxPreset = g.preset;
     document.body.dataset.gfxAuto = String(g.auto);
     this.canvas.dataset.gfxPreset = g.preset;
@@ -683,7 +805,7 @@ export class Renderer {
     const detailed = g.detail === 'detailed';
     for (const d of this.dice) {
       d.body.geometry = detailed ? this.dieGeos.rounded : this.dieGeos.box;
-      d.body.material = detailed ? this.dieMatsDetailed : this.dieMatsPlain;
+      d.body.material = !detailed ? this.dieMatsPlain : g.budget.material === 'physical' ? this.dieMatsDetailed : this.dieMatsBumped;
     }
     this.detailGroup.visible = detailed;
     const maps = [
@@ -696,10 +818,13 @@ export class Renderer {
       m.bumpMap = detailed ? tex : null;
       m.bumpScale = 1.5;
       m.envMapIntensity = env;
+      const l = this.lambertOf?.get(m);
+      if (l) { l.map = m.map; l.bumpMap = m.bumpMap; l.bumpScale = m.bumpScale; }
     }
 
     // Particles.
-    if (this._emberCount !== PARTICLES[g.particles]) this.buildEmbers(PARTICLES[g.particles]);
+    const embers = emberCount(g.particles, g.budget);
+    if (this._emberCount !== embers) this.buildEmbers(embers);
 
     this.scene.traverse((o) => {
       const mats = Array.isArray(o.material) ? o.material : [o.material];
@@ -718,6 +843,7 @@ export class Renderer {
   graphicsInfo() {
     return {
       gpu: this.gpu,
+      level: this.level,
       detected: this.detected,
       resolved: this.q,
       pixels: [Math.round(this.size[0] * this.pixelRatio), Math.round(this.size[1] * this.pixelRatio)],
@@ -761,7 +887,7 @@ export class Renderer {
       composer.setSize(w, h);
       composer.addPass(new RenderPass(this.scene, this.camera));
       if (g.ao !== 'off') {
-        const ao = new GTAOPass(this.scene, this.camera, pw, ph);
+        const ao = atScale(new GTAOPass(this.scene, this.camera, pw, ph), g.budget.aoRes);
         ao.output = GTAOPass.OUTPUT.Default;
         ao.blendIntensity = 0.75;
         ao.updateGtaoMaterial({ radius: 0.45, distanceExponent: 1.5, thickness: 1.0, scale: 1.0, samples: g.ao === 'high' ? 16 : 8 });
@@ -770,7 +896,7 @@ export class Renderer {
       }
       if (g.bloom === 'on') {
         // High threshold: only the fire, embers, moon and specular glints bloom.
-        composer.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.55, 0.45, 1.25));
+        composer.addPass(atScale(new UnrealBloomPass(new THREE.Vector2(w, h), 0.55, 0.45, 1.25), g.budget.bloomRes));
       }
       composer.addPass(new OutputPass());
       if (g.grade === 'on') composer.addPass(new ShaderPass(GradeShader));

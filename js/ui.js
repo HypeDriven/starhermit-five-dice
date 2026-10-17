@@ -505,10 +505,11 @@ export class UI {
     const renderer = this.env.getRenderer?.();
     const info = renderer?.graphicsInfo?.();
     const detected = info?.detected || 'balanced';
-    const r = gfxResolve(saved(), detected);
+    const level = info?.level;
+    const r = gfxResolve(saved(), detected, level);
     const commit = (next) => {
       s.graphics = next;
-      document.body.dataset.gfxPreset = gfxResolve(next, detected).preset;
+      document.body.dataset.gfxPreset = gfxResolve(next, detected, level).preset;
       save();
       const focusId = document.activeElement?.id;
       this.buildGraphicsSection(root, save);
@@ -574,7 +575,7 @@ export class UI {
         note.hidden = false;
         return;
       }
-      summary.textContent = `${i.gpu || t('unknownGpu')} · ${gfxDescribe(i.resolved, i.pixels, words)}`;
+      summary.textContent = `${i.gpu || t('unknownGpu')} · ${t('level', { level: i.level ?? 0 })} · ${gfxDescribe(i.resolved, i.pixels, words)}`;
       note.textContent = t('postFailed');
       note.hidden = !i.postFailed;
     };
