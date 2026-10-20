@@ -165,6 +165,8 @@ Title, Practice setup, Learn, Journey, Challenges, Profile & Scores, Help & Rule
 
 **Desktop (≥1024 px).** Three-column grid: scorecard rail `minmax(240px, 320px)` · stage · table rail `minmax(220px, 300px)`. The stage holds the canvas, the lesson banner (top centre), the countdown numeral, the dice tray (bottom centre) and the action tray above it; the right rail repeats the actions as a vertical stack with Pause and Leave table. Top bar: title, status line (mode · round · actor · rolls left · ⏱ remaining on timed tables), Pause, Help, Settings.
 
+**HUD redraws.** `ui.js:updateHUD` runs on every table event and on the once-a-second clock tick, but each rail and tray only swaps in new buttons when their markup changed (keyboard focus stays on the same die, row or button), and a new turn redraws right after its undo snapshot is taken, so a click is never lost to a button replaced between press and release.
+
 **Compact / portrait mobile (<1024 px).** Rails become off-canvas drawers (`min(85vw, 320px)`) opened by the *Card* and *Table* buttons at the top corners (z-index 8, above the open rail so they stay tappable). The dice tray sits `8.2rem + safe-area` above the bottom; the action tray wraps below it with 52 px-tall Roll/Hint/Undo; Pause and Leave table are hidden from the tray (reachable from the top bar and the Paused overlay). The toast sits 7 rem from the bottom so it never covers the trays.
 
 **Landscape mobile.** The dice tray becomes a vertical column on the right edge; the action tray sits along the bottom.

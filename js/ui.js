@@ -710,8 +710,7 @@ export class UI {
 
   renderScorecard(st, legal, previews, humanTurn, filled, total) {
     const me = currentPlayer(st);
-    const rail = this._els['rail-left'];
-    rail.replaceChildren();
+    const rail = this.h('div');
     const canScore = humanTurn && st.hasRolled;
     const scoreable = new Set(legal.scoreable);
 
@@ -761,11 +760,11 @@ export class UI {
       class: 'bonus-meter',
       text: b.bonus ? T('Lodge bonus earned (+{n})', { n: UPPER_BONUS }) : T('Upper bonus: {n}/{target}', { n: up, target: UPPER_BONUS_THRESHOLD }),
     }));
+    this.swapIn(this._els['rail-left'], rail);
   }
 
   renderRightRail(st) {
-    const rail = this._els['rail-right'];
-    rail.replaceChildren();
+    const rail = this.h('div');
     const sec = this.h('section', {});
     sec.append(this.h('h2', { text: T('Table') }));
     const ul = this.h('ul', { class: 'player-list' });
@@ -784,6 +783,7 @@ export class UI {
     this.buildActionButtons(stack, st);
     acts.append(stack);
     rail.append(acts);
+    this.swapIn(this._els['rail-right'], rail);
   }
 
   buildActionButtons(container, st) {
@@ -817,8 +817,7 @@ export class UI {
   }
 
   renderDiceTray(st, legal, humanTurn) {
-    const tray = this._els['dice-tray'];
-    tray.replaceChildren();
+    const tray = this.h('div');
     const canHold = humanTurn && legal.holdable.length > 0;
     for (let i = 0; i < DICE_COUNT; i++) {
       const v = st.dice[i];
@@ -835,12 +834,31 @@ export class UI {
       }, this.h('span', { class: 'pip', text: v > 0 ? PIP_GLYPHS[v - 1] : '–' }));
       tray.append(btn);
     }
+    this.swapIn(this._els['dice-tray'], tray);
   }
 
   renderActionTray(st, legal, humanTurn) {
-    const tray = this._els['action-tray'];
-    tray.replaceChildren();
+    const tray = this.h('div');
     this.buildActionButtons(tray, st);
+    this.swapIn(this._els['action-tray'], tray);
+  }
+
+  // The HUD is redrawn every second and on every table event. A redraw only
+  // replaces a container's children when the new markup differs: replacing a
+  // button between press and release swallowed its click (a click needs both
+  // on the same element). The handlers are the same on every build, so equal
+  // markup keeps the buttons on screen. A real change keeps keyboard focus on
+  // the same die, row or button.
+  swapIn(container, fresh) {
+    if (fresh.innerHTML === container.innerHTML) return;
+    const active = document.activeElement;
+    const had = active && active !== container && container.contains(active);
+    const key = had ? (active.dataset.cat ? `[data-cat="${active.dataset.cat}"]` : active.dataset.die ? `[data-die="${active.dataset.die}"]` : null) : null;
+    const at = had ? [...container.querySelectorAll('button')].indexOf(active) : -1;
+    container.replaceChildren(...fresh.childNodes);
+    if (!had) return;
+    const again = (key && container.querySelector(key)) || (at >= 0 && container.querySelectorAll('button')[at]);
+    if (again) again.focus({ preventScroll: true });
   }
 
   // --- pause / results -----------------------------------------------------------------
@@ -997,6 +1015,10 @@ export class UI {
         } else if (ev.type === 'turn') {
           const who = e.state.players[ev.player].name;
           this.announce(who === 'You' ? T('Your turn') : T("{name}'s turn", { name: playerName(who) }));
+          // The session takes the new turn's undo snapshot after this event:
+          // redraw once it has, so Undo is right at once rather than on the next
+          // clock tick, which would replace the buttons as the player reaches for Roll.
+          queueMicrotask(() => this.updateHUD());
         } else if (ev.type === 'roll') {
           if (this.settings.haptics && navigator.vibrate && ev.player === 0) navigator.vibrate(12);
         }
