@@ -1,24 +1,17 @@
-/* Five Dice — translation tables (see js/i18n.js).
+/* Five Dice — translation tables (see js/i18n.js; an ES module).
  * Each row: [English key, es-419, de-DE, fr-FR, pt-BR, it-IT]. en-GB, es-ES and
  * fr-CA list only where they differ from en-US, es-419 and fr-FR.
  * "Five Dice", "StarHermit" and the opponents' names (Pip, Bram, Polaris…) are
- * names and stay as they are. The Graphics panel strings live in
- * js/gfx-i18n.js, the StarHermit account strings in js/platform-i18n.js.
+ * names and stay as they are.
  */
+const OUT = {};
 (function (root) {
   'use strict';
   var ROWS = [
     // ---- shell / static markup
-    ['Skip to actions', 'Ir a las acciones', 'Zu den Aktionen springen', 'Aller aux actions', 'Ir para as ações', 'Vai alle azioni'],
-    ['Game', 'Juego', 'Spiel', 'Jeu', 'Jogo', 'Gioco'],
     ['Pause', 'Pausa', 'Pause', 'Pause', 'Pausar', 'Pausa'],
     ['Help', 'Ayuda', 'Hilfe', 'Aide', 'Ajuda', 'Aiuto'],
     ['Settings', 'Ajustes', 'Einstellungen', 'Paramètres', 'Configurações', 'Impostazioni'],
-    ['Scorecard', 'Tarjeta de puntos', 'Punktezettel', 'Feuille de score', 'Cartela de pontos', 'Segnapunti'],
-    ['Dice table', 'Mesa de dados', 'Würfeltisch', 'Table de dés', 'Mesa de dados', 'Tavolo dei dadi'],
-    ['Dice — hold or release', 'Dados: guardar o soltar', 'Würfel – halten oder freigeben', 'Dés — garder ou relâcher', 'Dados — segurar ou soltar', 'Dadi — tieni o rilascia'],
-    ['Turn actions', 'Acciones del turno', 'Zugaktionen', 'Actions du tour', 'Ações do turno', 'Azioni del turno'],
-    ['Table status', 'Estado de la mesa', 'Tischstatus', 'État de la table', 'Status da mesa', 'Stato del tavolo'],
     ['Card', 'Tarjeta', 'Zettel', 'Feuille', 'Cartela', 'Scheda'],
     ['Table', 'Mesa', 'Tisch', 'Table', 'Mesa', 'Tavolo'],
     ['Close', 'Cerrar', 'Schließen', 'Fermer', 'Fechar', 'Chiudi'],
@@ -26,6 +19,28 @@
     ['Cancel', 'Cancelar', 'Abbrechen', 'Annuler', 'Cancelar', 'Annulla'],
     ['Confirm', 'Confirmar', 'Bestätigen', 'Confirmer', 'Confirmar', 'Conferma'],
 
+    // ---- the StarHermit account (was js/platform-i18n.js)
+    ['Sign in with StarHermit', 'Iniciar sesión con StarHermit', 'Mit StarHermit anmelden', 'Se connecter avec StarHermit', 'Entrar com StarHermit', 'Accedi con StarHermit'],
+    ['sync progress and settings to your account', 'sincroniza tu progreso y ajustes con tu cuenta', 'Fortschritt und Einstellungen mit deinem Konto synchronisieren', 'synchronise ta progression et tes réglages avec ton compte', 'sincronize progresso e configurações com sua conta', 'sincronizza progressi e impostazioni con il tuo account'],
+    ['Invite a friend', 'Invitar a un amigo', 'Freund einladen', 'Inviter un ami', 'Convidar um amigo', 'Invita un amico'],
+    ['copy a link that adds you as friends', 'copia un enlace para agregarse como amigos', 'Link kopieren, über den ihr Freunde werdet', 'copie un lien pour devenir amis', 'copie um link para virarem amigos', 'copia un link per diventare amici'],
+    ['Invite link copied to clipboard', 'Enlace de invitación copiado al portapapeles', 'Einladungslink in die Zwischenablage kopiert', 'Lien d’invitation copié dans le presse-papiers', 'Link de convite copiado para a área de transferência', 'Link d’invito copiato negli appunti'],
+    ['Could not copy the invite link', 'No se pudo copiar el enlace de invitación', 'Einladungslink konnte nicht kopiert werden', 'Impossible de copier le lien d’invitation', 'Não foi possível copiar o link de convite', 'Impossibile copiare il link d’invito'],
+    ['Signed out of StarHermit — progress keeps saving on this device.', 'Se cerró la sesión de StarHermit; el progreso se sigue guardando en este dispositivo.', 'Von StarHermit abgemeldet – der Fortschritt wird weiter auf diesem Gerät gespeichert.', 'Déconnecté de StarHermit : la progression reste enregistrée sur cet appareil.', 'Você saiu do StarHermit — o progresso continua salvo neste dispositivo.', 'Disconnesso da StarHermit: i progressi restano salvati su questo dispositivo.'],
+    ['Posting score to the leaderboard…', 'Publicando la puntuación en la clasificación…', 'Punktzahl wird an die Bestenliste gesendet …', 'Envoi du score au classement…', 'Enviando a pontuação para o ranking…', 'Invio del punteggio alla classifica…'],
+    ['Leaderboard rank: #{rank}', 'Puesto en la clasificación: #{rank}', 'Platz in der Bestenliste: #{rank}', 'Rang au classement : #{rank}', 'Posição no ranking: #{rank}', 'Posizione in classifica: #{rank}'],
+    ['Score posted to the leaderboard.', 'Puntuación publicada en la clasificación.', 'Punktzahl in der Bestenliste eingetragen.', 'Score publié au classement.', 'Pontuação enviada para o ranking.', 'Punteggio pubblicato in classifica.'],
+    ['Score not posted to the leaderboard.', 'La puntuación no se publicó en la clasificación.', 'Punktzahl nicht in der Bestenliste eingetragen.', 'Score non publié au classement.', 'A pontuação não foi enviada para o ranking.', 'Punteggio non pubblicato in classifica.'],
+
+    // ---- the runtime's Options (engine client)
+    ['Volumes, mute, graphics quality, frame rate, language, reduced motion, high contrast and text size are in the StarHermit Options.',
+      'El volumen, el silencio, la calidad gráfica, la tasa de fotogramas, el idioma, el movimiento reducido, el alto contraste y el tamaño del texto están en las Opciones de StarHermit.',
+      'Lautstärke, Stummschaltung, Grafikqualität, Bildrate, Sprache, reduzierte Bewegung, hoher Kontrast und Textgröße findest du in den StarHermit-Optionen.',
+      'Le volume, la sourdine, la qualité graphique, la fréquence d’images, la langue, le mouvement réduit, le contraste élevé et la taille du texte se trouvent dans les Options StarHermit.',
+      'Volume, mudo, qualidade gráfica, taxa de quadros, idioma, movimento reduzido, alto contraste e tamanho do texto ficam nas Opções do StarHermit.',
+      'Volume, silenzioso, qualità grafica, frequenza dei fotogrammi, lingua, movimento ridotto, contrasto elevato e dimensione del testo si trovano nelle Opzioni StarHermit.'],
+    ['Open Options', 'Abrir Opciones', 'Optionen öffnen', 'Ouvrir les Options', 'Abrir Opções', 'Apri Opzioni'],
+    ['Change keys and buttons', 'Cambiar teclas y botones', 'Tasten und Knöpfe ändern', 'Modifier les touches et boutons', 'Alterar teclas e botões', 'Cambia tasti e pulsanti'],
     // ---- title menu
     ['A cozy mountain-lodge dice table. Roll five dice up to three times, hold the keepers, and fill your card — highest total wins.',
       'Una acogedora mesa de dados en un refugio de montaña. Tira cinco dados hasta tres veces, guarda los buenos y llena tu tarjeta: gana el total más alto.',
@@ -164,11 +179,6 @@
 
     // ---- settings
     ['Audio', 'Audio', 'Audio', 'Audio', 'Áudio', 'Audio'],
-    ['Music', 'Música', 'Musik', 'Musique', 'Música', 'Musica'],
-    ['Effects', 'Efectos', 'Effekte', 'Effets', 'Efeitos', 'Effetti'],
-    ['Ambience', 'Ambiente', 'Atmosphäre', 'Ambiance', 'Ambiente', 'Ambiente'],
-    ['Voice', 'Voz', 'Stimme', 'Voix', 'Voz', 'Voce'],
-    ['Mute all', 'Silenciar todo', 'Alles stumm', 'Tout couper', 'Silenciar tudo', 'Silenzia tutto'],
     ['Captions for audio cues', 'Subtítulos para señales de audio', 'Untertitel für Audiosignale', 'Sous-titres des signaux sonores', 'Legendas para sinais sonoros', 'Sottotitoli per i segnali audio'],
     ['Display', 'Pantalla', 'Anzeige', 'Affichage', 'Tela', 'Schermo'],
     ['Theme', 'Tema', 'Thema', 'Thème', 'Tema', 'Tema'],
@@ -181,15 +191,12 @@
     ['Standard', 'Estándar', 'Standard', 'Standard', 'Padrão', 'Standard'],
     ['Low', 'Baja', 'Niedrig', 'Basse', 'Baixa', 'Bassa'],
     ['Overhead', 'Cenital', 'Von oben', 'Vue du dessus', 'De cima', 'Dall’alto'],
-    ['Reduced motion', 'Movimiento reducido', 'Weniger Bewegung', 'Animations réduites', 'Movimento reduzido', 'Movimento ridotto'],
-    ['High contrast', 'Alto contraste', 'Hoher Kontrast', 'Contraste élevé', 'Alto contraste', 'Alto contrasto'],
     ['Color-vision palette', 'Paleta para daltonismo', 'Farbsehen-Palette', 'Palette daltonisme', 'Paleta para daltonismo', 'Tavolozza per daltonismo'],
     ['Default', 'Predeterminada', 'Standard', 'Par défaut', 'Padrão', 'Predefinita'],
     ['Deuteranopia-safe', 'Apta para deuteranopía', 'Für Deuteranopie', 'Adaptée deutéranopie', 'Para deuteranopia', 'Per deuteranopia'],
     ['Protanopia-safe', 'Apta para protanopía', 'Für Protanopie', 'Adaptée protanopie', 'Para protanopia', 'Per protanopia'],
     ['Tritanopia-safe', 'Apta para tritanopía', 'Für Tritanopie', 'Adaptée tritanopie', 'Para tritanopia', 'Per tritanopia'],
     ['Controls & access', 'Controles y accesibilidad', 'Steuerung & Zugänglichkeit', 'Commandes et accessibilité', 'Controles e acessibilidade', 'Comandi e accessibilità'],
-    ['Larger text', 'Texto más grande', 'Größerer Text', 'Texte agrandi', 'Texto maior', 'Testo più grande'],
     ['Left-handed controls', 'Controles para zurdos', 'Linkshänder-Steuerung', 'Commandes pour gauchers', 'Controles para canhotos', 'Comandi per mancini'],
     ['Hold to confirm scoring', 'Confirmar antes de anotar', 'Werten bestätigen', 'Confirmer avant de marquer', 'Confirmar antes de marcar', 'Conferma prima di segnare'],
     ['Timing assistance', 'Asistencia de tiempo', 'Zeithilfe', 'Aide au rythme', 'Assistência de tempo', 'Assistenza sui tempi'],
@@ -204,7 +211,6 @@
     ['Lodge Guide', 'Guía del refugio', 'Hüttenführer', 'Guide du chalet', 'Guia do chalé', 'Guida del rifugio'],
     ['Guest', 'Invitado', 'Gast', 'Invité', 'Convidado', 'Ospite'],
     ['Display name', 'Nombre visible', 'Anzeigename', 'Nom affiché', 'Nome de exibição', 'Nome visualizzato'],
-    ['Name saved', 'Nombre guardado', 'Name gespeichert', 'Nom enregistré', 'Nome salvo', 'Nome salvato'],
     ['Guest profile — progress is stored on this device. Sign in from the host shell for durable cloud progress.', 'Perfil de invitado: el progreso se guarda en este dispositivo. Inicia sesión desde la plataforma para guardarlo en la nube.', 'Gastprofil – der Fortschritt bleibt auf diesem Gerät. Melde dich über die Plattform an, um ihn dauerhaft in der Cloud zu sichern.', 'Profil invité — la progression est enregistrée sur cet appareil. Connectez-vous depuis la plateforme pour la conserver dans le nuage.', 'Perfil de convidado — o progresso fica salvo neste dispositivo. Entre pela plataforma para guardá-lo na nuvem.', 'Profilo ospite: i progressi restano su questo dispositivo. Accedi dalla piattaforma per salvarli nel cloud.'],
     ['Signed in with your account.', 'Sesión iniciada con tu cuenta.', 'Mit deinem Konto angemeldet.', 'Connecté avec votre compte.', 'Conectado com sua conta.', 'Accesso effettuato con il tuo account.'],
     ['Lifetime', 'Historial', 'Insgesamt', 'Bilan', 'Histórico', 'Totale'],
@@ -220,7 +226,6 @@
     ['Daily tables', 'Mesas diarias', 'Tagestische', 'Tables du jour', 'Mesas diárias', 'Tavoli del giorno'],
     ['Challenge tables', 'Mesas de desafío', 'Herausforderungstische', 'Tables de défi', 'Mesas de desafio', 'Tavoli sfida'],
     ['casual (local)', 'casual (local)', 'locker (lokal)', 'détente (local)', 'casual (local)', 'casual (locale)'],
-    ['friends', 'amigos', 'Freunde', 'amis', 'amigos', 'amici'],
     ['global', 'global', 'global', 'mondial', 'global', 'globale'],
     ['First Table', 'Primera mesa', 'Erster Tisch', 'Première table', 'Primeira mesa', 'Primo tavolo'],
     ['Win your first table.', 'Gana tu primera mesa.', 'Gewinne deinen ersten Tisch.', 'Gagnez votre première table.', 'Vença sua primeira mesa.', 'Vinci il tuo primo tavolo.'],
@@ -244,7 +249,8 @@
     ["{name}'s card — {filled}/{total} filled", 'Tarjeta de {name}: {filled}/{total} llenas', 'Zettel von {name} – {filled}/{total} gefüllt', 'Feuille de {name} — {filled}/{total} remplies', 'Cartela de {name} — {filled}/{total} preenchidas', 'Scheda di {name} — {filled}/{total} piene'],
     ['Upper — face totals', 'Superior: suma por cara', 'Oben – Augensummen', 'Haut — totaux par face', 'Superior — soma por face', 'Superiore — somme per faccia'],
     ['Lower — hands', 'Inferior: combinaciones', 'Unten – Kombinationen', 'Bas — combinaisons', 'Inferior — combinações', 'Inferiore — combinazioni'],
-    ['Score {cat} for {n} points', 'Anotar {cat} por {n} puntos', '{cat} für {n} Punkte werten', 'Marquer {cat} pour {n} points', 'Marcar {cat} por {n} pontos', 'Segna {cat} per {n} punti'],
+    ['Score {cat}', 'Anotar {cat}', '{cat} werten', 'Marquer {cat}', 'Marcar {cat}', 'Segna {cat}'],
+    ['{n} points', '{n} puntos', '{n} Punkte', '{n} points', '{n} pontos', '{n} punti'],
     ['(roll first)', '(tira primero)', '(zuerst würfeln)', '(lancez d’abord)', '(role primeiro)', '(prima lancia)'],
     ['Upper {upper} · Bonus {bonus} · Lower {lower}', 'Superior {upper} · Bono {bonus} · Inferior {lower}', 'Oben {upper} · Bonus {bonus} · Unten {lower}', 'Haut {upper} · Bonus {bonus} · Bas {lower}', 'Superior {upper} · Bônus {bonus} · Inferior {lower}', 'Sopra {upper} · Bonus {bonus} · Sotto {lower}'],
     ['Lodge bonus earned (+{n})', 'Bono del refugio ganado (+{n})', 'Hüttenbonus erreicht (+{n})', 'Bonus du chalet obtenu (+{n})', 'Bônus do chalé conquistado (+{n})', 'Bonus del rifugio ottenuto (+{n})'],
@@ -314,8 +320,6 @@
     ['{cat} scores {n} right now.', '{cat} da {n} ahora mismo.', '{cat} bringt jetzt {n}.', '{cat} rapporte {n} maintenant.', '{cat} vale {n} agora.', '{cat} vale {n} adesso.'],
     ['Score {cat}?', '¿Anotar {cat}?', '{cat} werten?', 'Marquer {cat} ?', 'Marcar {cat}?', 'Segnare {cat}?'],
     ['🏆 Achievement unlocked: {names}', '🏆 Logro desbloqueado: {names}', '🏆 Erfolg freigeschaltet: {names}', '🏆 Succès débloqué : {names}', '🏆 Conquista desbloqueada: {names}', '🏆 Obiettivo sbloccato: {names}'],
-    ['Graphics context lost — rebuilding… (your table is safe)', 'Se perdió el contexto gráfico; reconstruyendo… (tu mesa está a salvo)', 'Grafikkontext verloren – wird neu aufgebaut … (dein Tisch ist sicher)', 'Contexte graphique perdu — reconstruction… (votre table est sauve)', 'Contexto gráfico perdido — reconstruindo… (sua mesa está segura)', 'Contesto grafico perso: ricostruzione… (il tavolo è al sicuro)'],
-    ['3D rendering is unavailable in this browser, so the table is shown as the accessible card-and-dice panel. Your progress and saves are unaffected.', 'El 3D no está disponible en este navegador, así que la mesa se muestra como el panel accesible de tarjeta y dados. Tu progreso y tus partidas guardadas no se ven afectados.', '3D ist in diesem Browser nicht verfügbar, daher wird der Tisch als barrierefreies Zettel-und-Würfel-Panel gezeigt. Fortschritt und Spielstände sind nicht betroffen.', 'Le rendu 3D n’est pas disponible dans ce navigateur : la table s’affiche sous forme de panneau accessible feuille et dés. Votre progression et vos sauvegardes ne sont pas touchées.', 'A renderização 3D não está disponível neste navegador, então a mesa aparece como o painel acessível de cartela e dados. Seu progresso e seus saves não são afetados.', 'Il 3D non è disponibile in questo browser, quindi il tavolo appare come pannello accessibile di scheda e dadi. Progressi e salvataggi non sono toccati.'],
     ['Nothing to leave.', 'No hay nada que dejar.', 'Nichts zu verlassen.', 'Rien à quitter.', 'Nada para sair.', 'Niente da lasciare.'],
     ['Undo is not available here.', 'Deshacer no está disponible aquí.', 'Rückgängig ist hier nicht möglich.', 'L’annulation n’est pas disponible ici.', 'Desfazer não está disponível aqui.', 'Annulla non è disponibile qui.'],
     ['Table ready. Starting in 3.', 'Mesa lista. Empieza en 3.', 'Tisch bereit. Start in 3.', 'Table prête. Début dans 3.', 'Mesa pronta. Começa em 3.', 'Tavolo pronto. Si parte tra 3.'],
@@ -348,7 +352,6 @@
     ['offline', 'sin conexión', 'offline', 'hors ligne', 'offline', 'offline'],
     ['Local play — fully offline-capable', 'Juego local: funciona sin conexión', 'Lokales Spiel – voll offlinefähig', 'Jeu local — fonctionne hors ligne', 'Jogo local — funciona offline', 'Gioco locale: funziona offline'],
     ['Progress is synced to your account.', 'El progreso se sincroniza con tu cuenta.', 'Der Fortschritt wird mit deinem Konto synchronisiert.', 'La progression est synchronisée avec votre compte.', 'O progresso é sincronizado com sua conta.', 'I progressi sono sincronizzati con il tuo account.'],
-    ['Progress is stored on this device.', 'El progreso se guarda en este dispositivo.', 'Der Fortschritt wird auf diesem Gerät gespeichert.', 'La progression est enregistrée sur cet appareil.', 'O progresso fica salvo neste dispositivo.', 'I progressi restano su questo dispositivo.'],
     ['Saving to the cloud…', 'Guardando en la nube…', 'Wird in der Cloud gespeichert …', 'Enregistrement dans le nuage…', 'Salvando na nuvem…', 'Salvataggio nel cloud…'],
     ['Cloud sync failed — will retry; progress is safe on this device.', 'Falló la sincronización; se reintentará. El progreso está a salvo en este dispositivo.', 'Cloud-Sync fehlgeschlagen – neuer Versuch folgt; der Fortschritt ist auf diesem Gerät sicher.', 'Échec de la synchronisation — nouvel essai à venir ; la progression est sauve sur cet appareil.', 'Falha na sincronização — tentaremos de novo; o progresso está seguro neste dispositivo.', 'Sincronizzazione non riuscita: riproveremo; i progressi sono al sicuro su questo dispositivo.'],
     ['Offline — progress is stored on this device.', 'Sin conexión: el progreso se guarda en este dispositivo.', 'Offline – der Fortschritt wird auf diesem Gerät gespeichert.', 'Hors ligne — la progression est enregistrée sur cet appareil.', 'Offline — o progresso fica salvo neste dispositivo.', 'Offline: i progressi restano su questo dispositivo.']
@@ -361,6 +364,11 @@
       'Color-vision palette': 'Colour-vision palette'
     },
     'es-ES': {
+      'sync progress and settings to your account': 'sincroniza tu progreso y tus ajustes con tu cuenta',
+      'copy a link that adds you as friends': 'copia un enlace para añadiros como amigos',
+      'Could not copy the invite link': 'No se ha podido copiar el enlace de invitación',
+      'Signed out of StarHermit — progress keeps saving on this device.': 'Se ha cerrado la sesión de StarHermit; el progreso se sigue guardando en este dispositivo.',
+      'Score not posted to the leaderboard.': 'La puntuación no se ha publicado en la clasificación.',
       'pass-and-play, no AI': 'pasarse el dispositivo, sin IA',
       'You won with {n} points': 'Has ganado con {n} puntos',
       'Table over. You scored {n} points': 'Mesa terminada. Has hecho {n} puntos',
@@ -369,10 +377,13 @@
       'Table restored. You were away {min} min; round {round}, your turn.': 'Mesa restaurada. Has estado fuera {min} min; ronda {round}, tu turno.',
       'The table is over.': 'La mesa ha terminado.',
       'Table restored. You were away {min} min; round {round}, {name} to act.': 'Mesa restaurada. Has estado fuera {min} min; ronda {round}, turno de {name}.',
-      'Graphics context lost — rebuilding… (your table is safe)': 'Se ha perdido el contexto gráfico; reconstruyendo… (tu mesa está a salvo)',
       'No saved table found.': 'No se ha encontrado ninguna mesa guardada.'
     },
     'fr-CA': {
+      'sync progress and settings to your account': 'synchronise ta progression et tes paramètres avec ton compte',
+      'Posting score to the leaderboard…': 'Envoi du pointage au classement…',
+      'Score posted to the leaderboard.': 'Pointage publié au classement.',
+      'Score not posted to the leaderboard.': 'Pointage non publié au classement.',
       'Haptics': 'Rétroaction haptique',
       'Settings': 'Paramètres',
       'Go!': 'Go !'
@@ -383,4 +394,5 @@
     FULL.forEach(function (l, i) { tables[l][r[0]] = r[i + 1]; });
   });
   root.FD_STRINGS = tables;
-})(typeof self !== 'undefined' ? self : this);
+})(OUT);
+export const FD_STRINGS = OUT.FD_STRINGS;

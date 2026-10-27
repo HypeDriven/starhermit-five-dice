@@ -1,0 +1,119 @@
+# The overlays from the title and back (Practice setup, Help & Rules, Settings, Profile & Scores with a
+# board tab, Journey with its locked stages, Challenges), then a Practice table: the countdown, Escape to
+# pause and Resume, a roll, a hold by key and by the die button, the camera key, the Table drawer, Leave
+# table cancelled, Settings from the pause menu and back (the top bar's Settings and the tray's and Table drawer's
+# Leave table come first in build order, hence #2 / #3), and a forfeit from the pause menu to its results.
+until 300 Five Dice
+frames 150
+expect Content v1 · Rules v1
+expect 0 / 40 stages cleared
+save title
+click =Practice
+until 60 Practice setup
+frames 10
+expect A relaxed table. The AI settles early.
+save practice
+key Escape 1
+until 60 Content v1
+frames 10
+click =Help & Rules
+until 60 How a table works
+frames 10
+expect Upper rows (Kindling…Peaks) totaling 63+ earn a 35-point lodge bonus.
+save help
+key Escape 1
+frames 10
+# Settings is below the fold of the 960 × 540 title: Tab to it (from Practice) and press Enter.
+key Tab 1
+frames 3
+key Tab 1
+frames 3
+key Tab 1
+frames 3
+key Tab 1
+frames 3
+key Tab 1
+frames 3
+key Tab 1
+frames 3
+key Tab 1
+frames 3
+key Tab 1
+frames 3
+key Enter 1
+until 60 Open Options
+frames 10
+expect Color-vision palette
+save settings
+key Escape 1
+frames 10
+click =Profile & Scores
+until 60 Lifetime
+frames 10
+expect 0 tables · 0 wins
+click =Challenge
+until 60 No entries yet
+frames 5
+save profile
+key Escape 1
+frames 10
+click =Journey
+until 60 Frost Ridge
+frames 10
+expect locked
+key Escape 1
+frames 10
+click =Challenges
+until 60 Cabin Council
+frames 10
+key Escape 1
+frames 10
+click =Practice
+until 60 Practice setup
+frames 10
+click =Ember
+until 60 Practice — Ember
+frames 150
+key Escape 1
+until 60 Paused
+frames 10
+save paused
+click =Resume
+frames 10
+key KeyR 1
+frames 60
+key Digit1 1
+frames 10
+expect HELD
+click Die 2, showing
+frames 10
+key KeyC 1
+frames 70
+save held
+click =Table
+frames 10
+expect Pip
+save table-drawer
+click =Leave table
+until 60 Leave this table?
+frames 10
+click =Cancel
+frames 10
+key Escape 1
+until 60 Paused
+frames 10
+click =Settings #2
+until 60 Open Options
+frames 10
+key Escape 1
+until 60 Paused
+frames 10
+click =Leave table #3
+until 60 Forfeit this table?
+frames 10
+click =Yes
+until 200 Table forfeited
+frames 20
+save forfeit
+click =Back to title
+until 60 Content v1

@@ -1,0 +1,628 @@
+{
+  "styles": {
+    ".body": {
+      "text": {
+        "color": "$text",
+        "size": 16
+      }
+    },
+    ".muted": {
+      "text": {
+        "color": "$text-dim",
+        "size": 14.4
+      }
+    },
+    ".game-title": {
+      "text": {
+        "color": "$accent",
+        "size": 20,
+        "weight": "700"
+      }
+    },
+    ".status": {
+      "text": {
+        "color": "$text-soft",
+        "size": 14.4
+      }
+    },
+    ".status-sm": {
+      "text": {
+        "color": "$text-soft",
+        "size": 13.1
+      }
+    },
+    ".h2": {
+      "text": {
+        "color": "$accent",
+        "size": 20,
+        "weight": "700"
+      }
+    },
+    ".h3": {
+      "text": {
+        "color": "$accent",
+        "size": 16,
+        "weight": "700"
+      }
+    },
+    ".rail-h": {
+      "text": {
+        "color": "$accent",
+        "size": 16,
+        "weight": "700"
+      }
+    },
+    ".card-caption": {
+      "text": {
+        "color": "$accent",
+        "size": 14.7,
+        "weight": "600"
+      }
+    },
+    ".section-head": {
+      "text": {
+        "color": "$accent",
+        "size": 12.5,
+        "weight": "700"
+      }
+    },
+    ".cell": {
+      "text": {
+        "color": "$text",
+        "size": 14.7
+      }
+    },
+    ".cell-strong": {
+      "text": {
+        "color": "$text",
+        "size": 14.7,
+        "weight": "600"
+      }
+    },
+    ".cell-me": {
+      "text": {
+        "color": "$accent",
+        "size": 14.7,
+        "weight": "700"
+      }
+    },
+    ".th": {
+      "text": {
+        "color": "$text",
+        "size": 14.7,
+        "weight": "700"
+      }
+    },
+    ".bonus-meter": {
+      "text": {
+        "color": "$text",
+        "size": 13.6
+      }
+    },
+    ".ach-name": {
+      "text": {
+        "color": "$text",
+        "size": 16,
+        "weight": "700"
+      }
+    },
+    ".sub": {
+      "text": {
+        "color": "$text-dim",
+        "size": 13.6
+      }
+    },
+    ".strong": {
+      "text": {
+        "color": "$text",
+        "size": 16,
+        "weight": "600"
+      }
+    },
+    ".stars": {
+      "text": {
+        "color": "$accent",
+        "size": 16
+      }
+    },
+    ".countdown": {
+      "text": {
+        "color": "$accent",
+        "size": 96,
+        "weight": "800",
+        "shadow": {
+          "y": 4,
+          "blur": 24,
+          "color": "#000000b3"
+        }
+      }
+    },
+    ".caption": {
+      "text": {
+        "color": "$text",
+        "size": 13.6
+      }
+    },
+    ".btn": {
+      "background": "$panel-2",
+      "border": {
+        "width": 1,
+        "color": "$line",
+        "style": "solid"
+      },
+      "radius": 8.8,
+      "padding": {
+        "top": 8.8,
+        "end": 17.6,
+        "bottom": 8.8,
+        "start": 17.6
+      },
+      "minWidth": 44,
+      "minHeight": 44,
+      "text": {
+        "color": "$text",
+        "size": 16,
+        "weight": "600",
+        "align": "center"
+      },
+      "hovered": {
+        "background": "$panel-2-hover"
+      },
+      "disabled": {
+        "opacity": 0.45
+      }
+    },
+    ".btn-primary": {
+      "background": "$accent",
+      "border": {
+        "width": 1,
+        "color": "$accent",
+        "style": "solid"
+      },
+      "radius": 8.8,
+      "padding": {
+        "top": 8.8,
+        "end": 17.6,
+        "bottom": 8.8,
+        "start": 17.6
+      },
+      "minWidth": 44,
+      "minHeight": 44,
+      "text": {
+        "color": "$on-accent",
+        "size": 16,
+        "weight": "600",
+        "align": "center"
+      },
+      "disabled": {
+        "opacity": 0.45
+      }
+    },
+    ".btn-danger": {
+      "background": "$danger",
+      "border": {
+        "width": 1,
+        "color": "$danger",
+        "style": "solid"
+      },
+      "radius": 8.8,
+      "padding": {
+        "top": 8.8,
+        "end": 17.6,
+        "bottom": 8.8,
+        "start": 17.6
+      },
+      "minWidth": 44,
+      "minHeight": 44,
+      "text": {
+        "color": "#ffffff",
+        "size": 16,
+        "weight": "600",
+        "align": "center"
+      },
+      "disabled": {
+        "opacity": 0.45
+      }
+    },
+    ".btn-tray": {
+      "padding": {
+        "top": 6.4,
+        "end": 11.2,
+        "bottom": 6.4,
+        "start": 11.2
+      },
+      "minHeight": 52,
+      "text": {
+        "size": 16.8
+      }
+    },
+    ".menu-btn": {
+      "background": "$panel-2",
+      "border": {
+        "width": 1,
+        "color": "$line",
+        "style": "solid"
+      },
+      "radius": 8.8,
+      "padding": {
+        "top": 8.8,
+        "end": 17.6,
+        "bottom": 8.8,
+        "start": 17.6
+      },
+      "minHeight": 44,
+      "text": {
+        "color": "$text",
+        "size": 16,
+        "weight": "600",
+        "align": "start"
+      },
+      "hovered": {
+        "background": "$panel-2-hover"
+      }
+    },
+    ".menu-btn-primary": {
+      "background": "$accent",
+      "border": {
+        "width": 1,
+        "color": "$accent",
+        "style": "solid"
+      },
+      "radius": 8.8,
+      "padding": {
+        "top": 8.8,
+        "end": 17.6,
+        "bottom": 8.8,
+        "start": 17.6
+      },
+      "minHeight": 44,
+      "text": {
+        "color": "$on-accent",
+        "size": 16,
+        "weight": "600",
+        "align": "start"
+      }
+    },
+    ".icon-btn": {
+      "background": "#00000000",
+      "border": {
+        "width": 1,
+        "color": "$line",
+        "style": "solid"
+      },
+      "radius": 8,
+      "padding": {
+        "top": 4,
+        "end": 8,
+        "bottom": 4,
+        "start": 8
+      },
+      "minWidth": 44,
+      "minHeight": 44,
+      "text": {
+        "color": "$text",
+        "size": 16.8
+      },
+      "hovered": {
+        "background": "$panel-2"
+      }
+    },
+    ".drawer-toggle": {
+      "background": "$panel",
+      "border": {
+        "width": 1,
+        "color": "$line",
+        "style": "solid"
+      },
+      "radius": 8,
+      "padding": {
+        "top": 0,
+        "end": 12.8,
+        "bottom": 0,
+        "start": 12.8
+      },
+      "minHeight": 44,
+      "text": {
+        "color": "$text",
+        "size": 16
+      }
+    },
+    ".stage-card": {
+      "background": "$panel-2",
+      "border": {
+        "width": 1,
+        "color": "$line",
+        "style": "solid"
+      },
+      "radius": 9.6,
+      "padding": {
+        "top": 8.8,
+        "end": 11.2,
+        "bottom": 8.8,
+        "start": 11.2
+      },
+      "minHeight": 44,
+      "text": {
+        "color": "$text",
+        "align": "start"
+      },
+      "hovered": {
+        "background": "$panel-2-hover"
+      },
+      "disabled": {
+        "opacity": 0.45
+      }
+    },
+    ".stage-card-mastery": {
+      "background": "$panel-2",
+      "border": {
+        "width": 1,
+        "color": "$accent",
+        "style": "solid"
+      },
+      "radius": 9.6,
+      "padding": {
+        "top": 8.8,
+        "end": 11.2,
+        "bottom": 8.8,
+        "start": 11.2
+      },
+      "minHeight": 44,
+      "text": {
+        "color": "$text",
+        "align": "start"
+      },
+      "hovered": {
+        "background": "$panel-2-hover"
+      },
+      "disabled": {
+        "opacity": 0.45
+      }
+    },
+    ".topbar": {
+      "background": "$page",
+      "border": {
+        "width": {
+          "bottom": 1
+        },
+        "color": {
+          "bottom": "$line"
+        },
+        "style": "solid"
+      },
+      "padding": {
+        "top": 7.2,
+        "end": 14.4,
+        "bottom": 7.2,
+        "start": 14.4
+      }
+    },
+    ".rail-left": {
+      "background": "$page",
+      "border": {
+        "width": {
+          "end": 1
+        },
+        "color": {
+          "end": "$line"
+        },
+        "style": "solid"
+      },
+      "shadow": {
+        "blur": 30,
+        "color": "#00000080"
+      },
+      "padding": 11.2
+    },
+    ".rail-right": {
+      "background": "$page",
+      "border": {
+        "width": {
+          "start": 1
+        },
+        "color": {
+          "start": "$line"
+        },
+        "style": "solid"
+      },
+      "shadow": {
+        "blur": 30,
+        "color": "#00000080"
+      },
+      "padding": 11.2
+    },
+    ".overlay": {
+      "background": "$panel",
+      "border": {
+        "width": 1,
+        "color": "$line",
+        "style": "solid"
+      },
+      "radius": 14.4,
+      "shadow": {
+        "y": 18,
+        "blur": 50,
+        "color": "#0000008c"
+      },
+      "padding": {
+        "top": 17.6,
+        "end": 20.8,
+        "bottom": 17.6,
+        "start": 20.8
+      },
+      "text": {
+        "color": "$text"
+      }
+    },
+    ".player-row": {
+      "border": {
+        "width": 1,
+        "color": "#00000000",
+        "style": "solid"
+      },
+      "radius": 6.4,
+      "padding": {
+        "top": 5.6,
+        "end": 8,
+        "bottom": 5.6,
+        "start": 8
+      }
+    },
+    ".player-row-current": {
+      "background": "$panel-2",
+      "border": {
+        "width": 1,
+        "color": "$accent",
+        "style": "solid"
+      },
+      "radius": 6.4,
+      "padding": {
+        "top": 5.6,
+        "end": 8,
+        "bottom": 5.6,
+        "start": 8
+      }
+    },
+    ".lesson-banner": {
+      "background": "$accent",
+      "radius": 9.6,
+      "shadow": {
+        "y": 4,
+        "blur": 14,
+        "color": "#00000066"
+      },
+      "padding": {
+        "top": 8,
+        "end": 16,
+        "bottom": 8,
+        "start": 16
+      },
+      "text": {
+        "color": "$on-accent",
+        "size": 16,
+        "weight": "600",
+        "align": "center"
+      }
+    },
+    ".ach": {
+      "border": {
+        "width": 1,
+        "color": "$line",
+        "style": "solid"
+      },
+      "radius": 8,
+      "padding": {
+        "top": 6.4,
+        "end": 9.6,
+        "bottom": 6.4,
+        "start": 9.6
+      }
+    },
+    ".ach-locked": {
+      "border": {
+        "width": 1,
+        "color": "$line",
+        "style": "solid"
+      },
+      "radius": 8,
+      "padding": {
+        "top": 6.4,
+        "end": 9.6,
+        "bottom": 6.4,
+        "start": 9.6
+      },
+      "opacity": 0.5
+    },
+    ".toast": {
+      "background": "$panel",
+      "border": {
+        "width": 1,
+        "color": "$line",
+        "style": "solid"
+      },
+      "radius": 9.6,
+      "padding": {
+        "top": 8,
+        "end": 16,
+        "bottom": 8,
+        "start": 16
+      },
+      "text": {
+        "color": "$text",
+        "size": 16
+      }
+    },
+    ".caption-box": {
+      "background": "#00000099",
+      "radius": 6,
+      "padding": {
+        "top": 4,
+        "end": 10,
+        "bottom": 4,
+        "start": 10
+      }
+    },
+    ".table-row": {
+      "border": {
+        "width": {
+          "bottom": 1
+        },
+        "color": {
+          "bottom": "$line"
+        },
+        "style": "solid"
+      }
+    },
+    ".totals-row": {
+      "border": {
+        "width": {
+          "top": 1
+        },
+        "color": {
+          "top": "$line"
+        },
+        "style": "solid"
+      }
+    },
+    ".name-field": {
+      "background": "$panel-2",
+      "border": {
+        "width": 1,
+        "color": "$line",
+        "style": "solid"
+      },
+      "radius": 6.4,
+      "padding": {
+        "top": 5.6,
+        "end": 8,
+        "bottom": 5.6,
+        "start": 8
+      },
+      "minHeight": 44,
+      "text": {
+        "color": "$text"
+      }
+    }
+  },
+  "animations": {},
+  "tokens": {
+    "accent": "#e8a54b",
+    "danger": "#d95745",
+    "felt": "#3e5c4b",
+    "legal": "#8fd6a0",
+    "line": "#ffffff1f",
+    "on-accent": "#1c1208",
+    "page": "#241a12",
+    "panel": "#2c2016",
+    "panel-2": "#382a1c",
+    "panel-2-hover": "#3f2f20",
+    "select": "#7fc8a9",
+    "text": "#f2e9da",
+    "text-dim": "#f2e9dabf",
+    "text-soft": "#f2e9dad9",
+    "wall": "#2e2118",
+    "wood": "#6b4a2f"
+  },
+  "layouts": {},
+  "dropped": []
+}

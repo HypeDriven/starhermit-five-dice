@@ -1,19 +1,12 @@
-// Five Dice — translation helpers for ES modules. The tables and the language
-// choice live in js/i18n.js (window.FDI18N); outside the browser (unit tests)
-// T() returns the English key with {placeholders} filled.
-
-const fill = (s, vars) => String(s).replace(/\{(\w+)\}/g, (m, k) => (vars && k in vars ? String(vars[k]) : m));
+// Five Dice — translation helpers for the shared modules and the engine
+// client: T() over js/i18n.js, the generic seat names, N() for deferred keys.
+import { T as translate, getLocale } from './i18n.js';
 
 /** Translate an English source string. */
-export function T(key, vars) {
-  const I = globalThis.FDI18N;
-  return I ? I.T(key, vars) : fill(key, vars);
-}
+export function T(key, vars) { return translate(key, vars); }
 
-/** The effective game locale (en-US outside the browser). */
-export function lang() {
-  return globalThis.FDI18N?.lang || 'en-US';
-}
+/** The effective game locale. */
+export function lang() { return getLocale(); }
 
 /** Seat names that are generic labels rather than proper names. */
 export function playerName(name) {

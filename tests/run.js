@@ -16,14 +16,6 @@ import {
   practiceDef, dailyForDate, findContent, CONTENT_VERSION,
 } from '../js/content.js';
 import { aiStep, AI_DIFFICULTIES } from '../js/ai.js';
-import {
-  detectPreset, resolve as gfxResolve, presetTier, choosePreset, describe as gfxDescribe,
-  detectLevel, presetForLevel, LEVELS, BUDGETS, budget, emberCount, PRESETS as GFX_PRESETS_ALL,
-  PRESETS as GFX_PRESETS, CATEGORIES as GFX_CATEGORIES,
-} from '../js/gfx.js';
-import { gfxStrings, pickLocale, GFX_LOCALES } from '../js/gfx-i18n.js';
-// js/gpu-level.js is a classic script in the page; imported here it sets globalThis.StarHermitGpu.
-await import('../js/gpu-level.js');
 
 let passed = 0;
 let failed = 0;
@@ -587,90 +579,6 @@ test('session: autosave snapshot round-trips incl. stats', () => {
   eq(hashState(s2.state), hashState(s.state), 'restored state hash matches');
   eq(s2.stats.avalanches, 1, 'stats restored with the snapshot');
   eq(s2.checkpoints.length, 1, 'checkpoints reset to a fresh init hash');
-});
-
-// --- graphics quality model (js/gfx.js) -------------------------------------------
-
-test('gfx: hardware level picks the Auto preset (StarHermit gpu-level.js)', () => {
-  eq(detectPreset('ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)'), 'low');
-  eq(detectPreset('llvmpipe (LLVM 15.0.7, 256 bits)'), 'low');
-  eq(detectPreset('ANGLE (AMD, AMD Radeon(TM) Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)'), 'low');
-  eq(detectPreset('ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11)'), 'low');
-  eq(detectPreset('ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11)'), 'balanced');
-  eq(detectPreset('ANGLE (NVIDIA, NVIDIA GeForce GTX 1070 Direct3D11 vs_5_0 ps_5_0)'), 'high');
-  eq(detectPreset('ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 Direct3D11 vs_5_0 ps_5_0)'), 'ultra');
-  eq(detectPreset('ANGLE (NVIDIA, NVIDIA GeForce RTX 5090 Direct3D11 vs_5_0 ps_5_0)'), 'ultra');
-  eq(detectLevel('NVIDIA GeForce RTX 5090'), 20);
-  eq(detectLevel('SwiftShader'), 0);
-  for (const [p, lv] of Object.entries(LEVELS)) eq(presetForLevel(lv), p);
-  eq(presetForLevel(9), 'balanced');
-  eq(presetForLevel(16), 'high');
-  ok(['low', 'balanced'].includes(detectPreset('Adreno (TM) 740', { mobile: true })), 'mobile Adreno 740 is Balanced at most');
-  eq(detectPreset('NVIDIA GeForce RTX 5090', { mobile: true }), 'balanced', 'phones/tablets cap at Balanced');
-  eq(detectPreset('SwiftShader', { mobile: true }), 'low');
-});
-
-test('gfx: per-preset budgets are explicit, grow from Low to Ultra and scale with the level', () => {
-  const keys = ['material', 'texture', 'pips', 'bevel', 'segments', 'stars', 'embers', 'bloomRes', 'aoRes'];
-  for (const p of GFX_PRESETS_ALL) for (const k of keys) ok(k in BUDGETS[p], `${p}.${k}`);
-  for (let i = 1; i < GFX_PRESETS_ALL.length; i++) {
-    const a = BUDGETS[GFX_PRESETS_ALL[i - 1]], b = BUDGETS[GFX_PRESETS_ALL[i]];
-    for (const k of keys.slice(1)) ok(b[k] >= a[k], `${GFX_PRESETS_ALL[i]}.${k} >= previous`);
-  }
-  eq(BUDGETS.low.material, 'lambert');
-  eq(BUDGETS.balanced.material, 'standard');
-  eq(BUDGETS.ultra.material, 'physical');
-  eq(JSON.stringify(budget('high', 10)), JSON.stringify(BUDGETS.high), 'floor level = table');
-  ok(budget('high', 14).embers > BUDGETS.high.embers, 'embers grow above the floor');
-  ok(budget('ultra', 20).embers <= BUDGETS.ultra.embers * 2, 'at most 2x');
-  ok(budget('ultra', 2).embers < BUDGETS.ultra.embers, 'fewer below the floor');
-  eq(emberCount('high', BUDGETS.low), 192);
-  eq(emberCount('off', BUDGETS.ultra), 0);
-  eq(JSON.stringify(gfxResolve({ preset: 'low' }, 'low', 0).budget), JSON.stringify(BUDGETS.low));
-  eq(gfxResolve({}, 'ultra', 20).level, 20);
-});
-
-test('gfx: resolve applies auto, preset rows, overrides and scale clamp', () => {
-  const auto = gfxResolve({}, 'low');
-  eq(auto.preset, 'low'); eq(auto.auto, true); eq(auto.shadows, 'off'); eq(auto.post, false, 'low renders without post');
-  eq(auto.adaptive, true); eq(auto.showFps, false);
-  const hi = gfxResolve({ preset: 'high' }, 'low');
-  eq(hi.preset, 'high'); eq(hi.auto, false); eq(hi.shadows, presetTier('high', 'shadows')); eq(hi.post, true);
-  const ov = gfxResolve({ preset: 'high', bloom: 'off', particles: 'bogus' }, 'low');
-  eq(ov.bloom, 'off', 'override wins'); eq(ov.particles, presetTier('high', 'particles'), 'invalid override ignored');
-  eq(gfxResolve({ render_scale: 5 }, 'high').renderScale, 2, 'scale clamps high');
-  eq(gfxResolve({ render_scale: 0.1 }, 'high').renderScale, 0.5, 'scale clamps low');
-  eq(gfxResolve({ preset: 'nope' }, undefined).preset, 'balanced', 'unknown falls back');
-  eq(gfxResolve({ adaptive: false, show_fps: true }, 'low').adaptive, false);
-  for (const p of GFX_PRESETS) for (const cat of Object.keys(GFX_CATEGORIES)) {
-    ok(GFX_CATEGORIES[cat].includes(presetTier(p, cat)), `${p}.${cat} valid`);
-  }
-});
-
-test('gfx: choosing a preset clears overrides, keeps scale/adaptive/fps', () => {
-  const next = choosePreset({ preset: 'high', bloom: 'off', shadows: 'high', render_scale: 1.5, show_fps: true }, 'ultra');
-  eq(next.preset, 'ultra'); eq(next.bloom, undefined); eq(next.shadows, undefined);
-  eq(next.render_scale, 1.5); eq(next.show_fps, true);
-  eq(choosePreset({}, 'auto').preset, 'auto');
-  ok(/no shadows/.test(gfxDescribe(gfxResolve({}, 'low'), [640, 480])), 'describe summary');
-  ok(/640×480 px/.test(gfxDescribe(gfxResolve({}, 'low'), [640, 480])), 'describe pixels');
-});
-
-test('gfx: panel strings exist in every supported locale', () => {
-  for (const loc of ['en-US', 'en-GB', 'es-419', 'es-ES', 'de-DE', 'fr-FR', 'fr-CA', 'pt-BR', 'it-IT']) {
-    ok(GFX_LOCALES.includes(loc), `${loc} present`);
-  }
-  eq(pickLocale('es-MX'), 'es-419'); eq(pickLocale('fr-CA'), 'fr-CA'); eq(pickLocale('pt-PT'), 'pt-BR'); eq(pickLocale('ja'), 'en-US');
-  const en = gfxStrings('en-US');
-  eq(gfxStrings('de-DE')('title'), 'Grafik');
-  eq(en('auto', { tier: 'Low' }), 'Auto (detected: Low)');
-  const keys = ['title', 'quality', 'auto', 'renderScale', 'fromPreset', 'adaptive', 'showFps', 'postFailed',
-    ...Object.keys(GFX_CATEGORIES).map((c) => `cat_${c}`)];
-  for (const loc of GFX_LOCALES) {
-    const t = gfxStrings(loc);
-    for (const k of keys) ok(t(k) && t(k) !== k, `${loc}:${k}`);
-    if (!loc.startsWith('en')) ok(t('title') !== en('title'), `${loc} translated`);
-  }
 });
 
 // --- server: authoritative submission validation (integration) --------------------

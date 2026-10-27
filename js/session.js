@@ -18,6 +18,17 @@ export const MACHINE_STATES = [
 
 const AUTOSAVE_KEY = 'fivedice:autosave';
 
+// The session's clocks in ms: `now` (monotonic, the round clock) and `wall`
+// (the date, for snapshots and ids). Browsers and node tests default to
+// performance.now() / Date.now(); the engine client drives `now` from the
+// runtime's fixed steps so round clocks and time limits advance with the
+// simulation and play scripts replay exactly, and `wall` from the platform's
+// clock.
+export const clock = {
+  now: () => performance.now(),
+  wall: () => Date.now(),
+};
+
 export class Session {
   constructor(platform, emit) {
     this.platform = platform;   // persistence + hosted adapter
@@ -29,7 +40,7 @@ export class Session {
     this.undoStack = [];        // snapshots taken at the start of human turns
     this.commands = [];         // ordered applied commands (replay log)
     this.checkpoints = [];      // periodic state hashes
-    this.sessionId = `${Date.now().toString(36)}-${Math.floor(Math.random() * 1e9).toString(36)}`;
+    this.sessionId = `${clock.wall().toString(36)}-${Math.floor(Math.random() * 1e9).toString(36)}`;
     this.startStamp = 0;        // perf clock when round went active
     this.pauseAccum = null;     // session-clock base (ms); set on first start
     this.pauseStart = 0;
@@ -52,7 +63,7 @@ export class Session {
   nowMs() {
     const running = this.machine === 'active' || this.machine === 'resolving' || this.machine === 'tutorial';
     if (!running) return this.state?.clock ?? 0;
-    return this.pauseAccum + (performance.now() - this.startStamp);
+    return this.pauseAccum + (clock.now() - this.startStamp);
   }
 
   // --- round lifecycle -----------------------------------------------------
@@ -65,14 +76,14 @@ export class Session {
     this.tutorialStep = 0;
     this.stats = { avalanches: 0, upperBonuses: 0, holdsUsed: 0 };
     this.pauseAccum = 0;
-    this.startStamp = performance.now();
+    this.startStamp = clock.now();
     this.snapshotTurnStart();
     this.transition(def.mode === 'learn' ? 'tutorial' : 'countdown', `start:${def.id}`);
     this.emit({ type: 'round', def, state: this.state });
   }
 
   beginActive() {
-    this.startStamp = performance.now();
+    this.startStamp = clock.now();
     this.pauseAccum = this.state?.clock ?? 0;
     this.transition('active', 'countdown-complete');
   }
@@ -81,14 +92,14 @@ export class Session {
     if (this.machine !== 'active' && this.machine !== 'tutorial') return;
     this.pausedFrom = this.machine;
     this.pauseAccum = this.nowMs();
-    this.pauseStart = performance.now();
+    this.pauseStart = clock.now();
     this.transition('paused', reason);
     this.saveSnapshot();
   }
 
   resume() {
     if (this.machine !== 'paused' && this.machine !== 'reconnecting') return;
-    this.startStamp = performance.now();
+    this.startStamp = clock.now();
     const back = this.pausedFrom === 'tutorial' ? 'tutorial' : 'active';
     this.pausedFrom = null;
     this.transition(back, `resume:${this.machineReason}`);
@@ -301,7 +312,7 @@ export class Session {
       v: 1, def: this.def, state: serialize(this.state),
       commands: this.commands.filter((c) => c.id > 0),
       stats: { ...this.stats },
-      savedAt: Date.now(), sessionId: this.sessionId,
+      savedAt: clock.wall(), sessionId: this.sessionId,
     };
     this.platform.saveLocal(AUTOSAVE_KEY, snap);
   }
@@ -318,7 +329,7 @@ export class Session {
       this.undoStack = [];
       this.checkpoints = [{ after: 0, hash: hashState(createGame(this.def)) }];
       this.stats = { avalanches: 0, upperBonuses: 0, holdsUsed: 0, ...(snap.stats || {}) };
-      const awayMs = Date.now() - (snap.savedAt || Date.now());
+      const awayMs = clock.wall() - (snap.savedAt || clock.wall());
       this.transition('paused', 'reconnect');
       this.emit({ type: 'round', def: this.def, state: this.state });
       this.emit({
@@ -377,7 +388,7 @@ export class Session {
         upper: r.upper, bonus: r.bonus, lower: r.lower,
       })),
       stats: { ...this.stats },
-      sessionId: this.sessionId, at: Date.now(),
+      sessionId: this.sessionId, at: clock.wall(),
       assists: this.def.assists, rulesV: this.def.rulesV, contentV: this.def.v,
       durationMs: this.state.clock,
     };
