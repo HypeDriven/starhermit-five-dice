@@ -11,7 +11,7 @@ Present tense: this document describes what the shipped game does today. Anythin
 | Genre | Turn-based dice / scorecard game (classic five-dice math, original names and setting) |
 | Players | 1–4 seats per table: solo target climbs, 1 human vs 1–3 lodge AI, or two humans pass-and-play on one screen |
 | Session | 13 rounds per player; ~4–6 min vs one AI, ~8 min four-handed; a Learn lesson ~3 min |
-| Platforms | StarHermit engine 1.24.0 script game (host API 1.21): natively in the StarHermit client and in desktop and mobile browsers through the engine's web runtime (portrait and landscape); keyboard, mouse, touch, gamepad |
+| Platforms | StarHermit engine 1.26.1 script game (host API 1.28): natively in the StarHermit client and in desktop and mobile browsers through the engine's web runtime (portrait and landscape); keyboard, mouse, touch, gamepad |
 | Rendering | `starhermit:scene` lodge table (three.js-style scene graph) behind a `starhermit:ui` immediate-mode HUD; every play action also exists as a UI control |
 | Persistence | `starhermit:storage`: the progress save (device + the player's cloud slot), the game's options (synced with the account), the saved table and round history on the device |
 
@@ -19,7 +19,7 @@ Present tense: this document describes what the shipped game does today. Anythin
 
 | Path | Responsibility |
 |---|---|
-| `starhermit.txt` | Manifest: `name`, `description`, `owner`, `server=score-script.js`, `cover=cover.jpg`, `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.24.0`, `engine.minor=19`, `engine.capabilities=platform,storage,clipboard`, one `control.<action>` and `engine.gamepad.<action>` line per action, `engine.group.*` headings for Options |
+| `starhermit.txt` | Manifest: `name`, `description`, `owner`, `server=score-script.js`, `cover=cover.jpg`, `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.26.1`, `engine.minor=28`, `engine.capabilities=platform,storage,clipboard`, one `control.<action>` and `engine.gamepad.<action>` line per action, `engine.group.*` headings for Options |
 | `native/main.ts` | Entry module: the overlay stack and flow, the round lifecycle, turn controls, AI pacing, countdown, results delay and clock heartbeat on the runtime's fixed steps, session-event presentation (sounds, captions, announcements, toasts, haptics, dice animation), progression and achievements, posting scores, input (actions, taps on the 3D dice), lifecycle (suspend/resume/quit) |
 | `native/screens.ts` | `starhermit:ui` built every frame: top bar, scorecard and table rails (or drawers), stage HUD (lesson banner, action tray, dice tray, countdown), title page over the key art, every dialog, toast and captions |
 | `native/render.ts` | The lodge scene on `starhermit:scene`: table, room, window, fireplace, embers, dice and their animation, camera presets, the look per graphics level, die picking |
@@ -183,7 +183,7 @@ Must never be cut off: Roll, the five die buttons, the drawer buttons, the statu
 | Starlit Refuge | #463a63 | #4a3626 | #1d1626 | #c9a0e8 | #f2ecf8 / #352347 | #b08fe0 | #8fd6a0 | #e06a7a | #0c0916 | #ece4f6 | #1a1424 |
 | Ember Night | #5c3a3a | #3c2a20 | #18100c | #f0764a | #f8efe2 / #402014 | #f0a35e | #a0d690 | #e0483c | #0a0605 | #f6e8dc | #201410 |
 
-Lights (three.js r160 intensities ÷ π, the engine's convention): warm key directional light `#ffcf98` (1.7, the only shadow caster, shadows reaching 16 units), a pooled lamp point light `#ffb066` over the felt, fire point light `#ff7733` flickering 90–100 %, hemisphere fill `#bcd0e8` / `#2a2018`; ACES filmic tone mapping at exposure 1.0, sRGB output; the background and distance fog are the theme wall colour at 35 %.
+Lights (the browser build's three.js r160 intensities): warm key directional light `#ffcf98` (1.7, the only shadow caster, its orthographic shadow box fitted to the table), a pooled lamp point light `#ffb066` over the felt, fire point light `#ff7733` flickering 90–100 %, hemisphere fill `#bcd0e8` / `#2a2018`; reflections give each lit material the RoomEnvironment(renderer) room as its own envMap at its page envMapIntensity; ACES filmic tone mapping at exposure 1.0, sRGB output; the background and distance fog are the theme wall colour at 35 %.
 
 **Shape language.** Round table (cylinder felt, torus rim, pedestal), cubes with circular pips (canvas textures, 128 px, larger single pip), ring markers under held dice, a dashed rounded held-row strip at the back of the table. Rectangular window with a deterministic 60-star scatter; a fireplace opening with an additive flame card. At *Detailed* table detail the dice are rounded (RoundedBoxGeometry) with a clearcoat and recessed pips (bump map), the felt, rim, log wall and plank floor carry procedural canvas textures, and the window gains a timber frame, moon glow and mountain ridge, the fireplace a stone surround and mantel, the rim a brass inlay. The procedural canvas textures are baked once into `assets/textures/*.png` by `tools/bake-textures.mjs` (the browser build's painters, run in Chrome); only the theme-coloured pip faces are painted at run time on `starhermit:canvas`.
 
@@ -247,7 +247,7 @@ Every player-facing string ships in nine locales: **en-US, en-GB, es-419, es-ES,
 
 | Feature | Status |
 |---|---|
-| Engine | Script game on the StarHermit engine 1.24.0 (`engine.minor=19`), capabilities `platform`, `storage`, `clipboard`; browsers load `index.html` (the engine's loader, pinned by hash on wiki.starhermit.com) |
+| Engine | Script game on the StarHermit engine 1.26.1 (`engine.minor=28`), capabilities `platform`, `storage`, `clipboard`; browsers load `index.html` (the engine's loader, pinned by hash on wiki.starhermit.com) |
 | Player | `starhermit:platform` `player()`: the display name in the status line and Profile & Scores; guests edit a local display name (≤20 chars) kept on the device |
 | Sign-in / invite | Guests see **Sign in with StarHermit** on the title (`requestSignIn`); signed-in players **Invite a friend** (copies `inviteLink()` to the clipboard). Signing out mid-session toasts that progress keeps saving on this device |
 | Cloud save | The progress document (`v`, `rev`, journey, challenges, achievements, totals, streakDays, bestDaily) is the game's `saves` save (schema 1): on the device and, signed in, in the account slot. A conflict between devices merges both (larger of each lifetime total, union of cleared stages/challenges, achievements with the earliest unlock, active days, the better best score and stars, `rev` above both); the account's copy replacing the device's is merged in the same way. The browser build's cloud save (the JS SDK's `saveJSON` of the same document, key `game:<slug>`) shows as foreign: it is read, merged into this device's progress and replaced once (`replaceForeign`). Guests' old browser `localStorage` progress cannot be migrated |

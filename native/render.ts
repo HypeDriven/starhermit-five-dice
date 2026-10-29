@@ -71,16 +71,19 @@ const seg = (n: number, k: number): number => Math.max(6, Math.round(n * (k || 1
 renderer.toneMapping = ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 const camera = new PerspectiveCamera(42, 1, 0.1, 60);
-const keyLight = new DirectionalLight(0xffcf98, 1.7 / PI);
+const keyLight = new DirectionalLight(0xffcf98, 1.7);
 keyLight.position.set(2.6, 7.5, 3.4);
 keyLight.target.position.set(0, 0, -0.3);
 keyLight.shadow.bias = -0.0004;
-keyLight.shadow.distance = 16;
-const lampLight = new PointLight(0xffb066, 7 / PI, 10, 2); // pooled warmth over the felt
+// js/render.js fitted the shadow frustum to the table (TABLE_RADIUS 3.7).
+Object.assign(keyLight.shadow.camera, { left: -3.7, right: 3.7, top: 3.7, bottom: -3.7, near: 4, far: 13 });
+keyLight.shadow.camera.updateProjectionMatrix();
+keyLight.shadow.normalBias = 0.02;
+const lampLight = new PointLight(0xffb066, 7, 10, 2); // pooled warmth over the felt
 lampLight.position.set(0.4, 4.2, 0.8);
-const fireLight = new PointLight(0xff7733, 26 / PI, 16, 2);
+const fireLight = new PointLight(0xff7733, 26, 16, 2);
 fireLight.position.set(FIRE_POS.x - 0.3, FIRE_POS.y + 0.3, -6.2);
-const fillLight = new HemisphereLight(0xbcd0e8, 0x2a2018, 0.5 / PI);
+const fillLight = new HemisphereLight(0xbcd0e8, 0x2a2018, 0.5);
 scene.add(keyLight, keyLight.target, lampLight, fireLight, fillLight);
 const env = new Group();
 scene.add(env);
@@ -231,8 +234,8 @@ function build(): void {
   const bg = new Color(t.wall).multiplyScalar(0.35);
   scene.background = bg;
   scene.fog = new Fog(bg, 14, 30);
-  scene.environment = refl ? envMap() : null;
-  fillLight.intensity = (refl ? 0.3 : 0.5) / PI;
+  scene.environment = null; // per-material envMaps below (end of build)
+  fillLight.intensity = refl ? 0.3 : 0.5;
   const tex = detailed ? {
     felt: baked("felt"), wood: baked("wood"), logs: baked("logs"), floor: baked("floor"), stone: baked("stone"),
   } : null;
@@ -347,6 +350,13 @@ function build(): void {
   oldGeo.dispose();
   oldRing.dispose();
   for (const m of oldMats) m.dispose();
+  // three r160 scaled scene.environment by each material's envMapIntensity; the engine (like
+  // r163+) does not, so each lit material carries the room as its own envMap instead.
+  const room = refl ? envMap() : null;
+  scene.traverse((o) => {
+    const m = (o as Mesh).material;
+    for (const x of Array.isArray(m) ? m : m ? [m] : []) if (x instanceof MeshStandardMaterial) x.envMap = room;
+  });
 }
 
 // -- camera (applyCameraPreset / _fitAspect) -------------------------------------------------------
@@ -402,6 +412,7 @@ export function applyCameraPreset(name: string, instant = false): void {
 }
 function frameCamera(): void {
   // The stage is a view.w × view.h image inside the window, at (view.x, view.y).
+  camera.aspect = view.w / Math.max(1, view.h);
   camera.setViewOffset(view.w, view.h, -view.x, -view.y, view.W, view.H);
   fitAspect();
 }
@@ -516,14 +527,14 @@ export function update(dt: number): void {
   if (!fireGlowMat || !flame || !starMat) return;
   if (reducedMotion) {
     // Reduced motion: steady light, no drifting sparks or twinkle.
-    fireLight.intensity = 26 / PI;
+    fireLight.intensity = 26;
     flame.scale.set(1, 1, 1);
     fireGlowMat.opacity = 0.9;
     starMat.opacity = 1;
     return;
   }
   const flicker = 0.9 + 0.1 * Math.sin(now * 0.011) * Math.sin(now * 0.0047 + 1.7);
-  fireLight.intensity = (26 * flicker) / PI;
+  fireLight.intensity = 26 * flicker;
   fireGlowMat.opacity = 0.75 + 0.25 * flicker;
   flame.scale.set(1 + 0.03 * Math.sin(now * 0.007), 0.94 + 0.12 * flicker * Math.sin(now * 0.013 + 0.5) ** 2, 1);
   starMat.opacity = 0.8 + 0.2 * Math.sin(now * 0.0021);
