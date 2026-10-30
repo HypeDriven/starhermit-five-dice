@@ -506,13 +506,13 @@ export function applyLook(next: Look): void {
     denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: next.ao === "high" ? 6 : 4, rings: 2, samples: next.ao === "high" ? 16 : 8, radiusExponent: 2 },
   };
   // High threshold: only the fire, embers, moon and specular glints bloom (UnrealBloomPass 0.55, 0.45, 1.25).
-  // three r160 page: minor 29 bloom follows r185 UnrealBloomPass, so the page strength is squared (pages on r177+ keep theirs).
-  renderer.bloom = next.bloom ? { strength: 0.55 * 0.55, radius: 0.45, threshold: 1.25, resolution: next.budget.bloomRes } : null;
+  // three r160 page: the engine's r160 UnrealBloomPass model (minor 30) at the page's own strength.
+  renderer.bloom = next.bloom ? { strength: 0.55, radius: 0.45, threshold: 1.25, resolution: next.budget.bloomRes, model: "r160" } : null;
   // js/render.js GradeShader (display space): a gentle S-curve, a touch more saturation,
-  // warm highlights / cool shadows and the 0.28 vignette (the old slight black lift has no counterpart).
+  // warm highlights / cool shadows, the slight black lift (s * 0.975 + 0.018) and the 0.28 vignette.
   renderer.grade = next.grade ? {
-    space: "display", contrast: 0.11, saturation: 1.1,
-    shadows: [0.95, 0.98, 1.06], highlights: [1.05, 1.0, 0.95], split: [0.15, 0.8],
+    space: "display", contrastCurve: "s", contrast: 0.22, saturation: 1.1,
+    shadows: [0.95, 0.98, 1.06], highlights: [1.05, 1.0, 0.95], split: [0.15, 0.8], levels: [0.975, 0.018],
     vignette: { amount: 0.28, inner: 0.32, outer: 0.85, scale: [1.1, 1.0] },
   } : null;
   renderer.antialias = next.antialias;
