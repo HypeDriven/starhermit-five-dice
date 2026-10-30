@@ -506,7 +506,8 @@ export function applyLook(next: Look): void {
     denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: next.ao === "high" ? 6 : 4, rings: 2, samples: next.ao === "high" ? 16 : 8, radiusExponent: 2 },
   };
   // High threshold: only the fire, embers, moon and specular glints bloom (UnrealBloomPass 0.55, 0.45, 1.25).
-  renderer.bloom = next.bloom ? { strength: 0.55, radius: 0.45, threshold: 1.25, resolution: next.budget.bloomRes } : null;
+  // three r160 page: minor 29 bloom follows r185 UnrealBloomPass, so the page strength is squared (pages on r177+ keep theirs).
+  renderer.bloom = next.bloom ? { strength: 0.55 * 0.55, radius: 0.45, threshold: 1.25, resolution: next.budget.bloomRes } : null;
   // js/render.js GradeShader (display space): a gentle S-curve, a touch more saturation,
   // warm highlights / cool shadows and the 0.28 vignette (the old slight black lift has no counterpart).
   renderer.grade = next.grade ? {
