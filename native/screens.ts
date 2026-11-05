@@ -63,21 +63,10 @@ function button(b: Btn, width: number | null = null): void {
   if (ui.style(...style, s).id(b.id).button(b.label ?? b.text, opts)) b.act();
 }
 /** Buttons at their own widths in rows that wrap at `width` (CSS flex-wrap). */
-function flow(label: string, list: Btn[], width: number, align: "start" | "center" | "end" = "center", gap = 8): void {
-  const rows: Btn[][] = [[]];
-  let used = 0;
-  const bw = (b: Btn): number => Math.min(width, b.width ?? buttonWidth(b.text, b.style ?? PLAIN));
-  for (const b of list) {
-    const w = bw(b);
-    if (rows[rows.length - 1]!.length && used + gap + w > width) { rows.push([]); used = 0; }
-    used += (rows[rows.length - 1]!.length ? gap : 0) + w;
-    rows[rows.length - 1]!.push(b);
-  }
-  ui.column(label, () => {
-    rows.forEach((row, ri) => ui.row(`${label}-r${ri}`, () => {
-      for (const b of row) button(b, b.width ?? (bw(b) >= width ? width : null));
-    }, { spacing: gap, align: "center" }));
-  }, { spacing: gap, align, width });
+function flow(label: string, list: Btn[], width: number, justify: "start" | "center" | "end" = "center", gap = 8): void {
+  ui.row(label, () => {
+    for (const b of list) button(b, b.width ?? (buttonWidth(b.text, b.style ?? PLAIN) >= width ? width : null));
+  }, { wrap: true, width, gap, justify, align: "center" });
 }
 /** Text up to `width` wide: one label when it fits, else a paragraph. */
 function para(text: string, width: number, cls = "body", id?: string, center = false): void {
@@ -89,29 +78,11 @@ function para(text: string, width: number, cls = "body", id?: string, center = f
   if (ui.measureText(text, { style: styles }).width / pr().scale <= width) u.label(text);
   else u.paragraph(text, width);
 }
-/** Cuts a single line to fit `width` with an ellipsis (CSS text-overflow). */
-function ellipsize(text: string, width: number, cls: string): string {
-  if (textWidth(text, cls) <= width) return text;
-  let s = text;
-  while (s.length > 1 && textWidth(s + "…", cls) > width) s = s.slice(0, -1);
-  return s.trimEnd() + "…";
-}
-/** Words that fit `width` on each of at most `lines` lines (the last one ellipsized). */
-function wrapLines(text: string, width: number, cls: string, lines: number): string[] {
-  const words = text.split(" ");
-  const out: string[] = [];
-  let cur = "";
-  for (let i = 0; i < words.length; i++) {
-    const next = cur ? `${cur} ${words[i]}` : words[i]!;
-    if (textWidth(next, cls) <= width || !cur) { cur = next; continue; }
-    out.push(cur);
-    cur = words[i]!;
-    if (out.length === lines - 1) { cur = words.slice(i).join(" "); break; }
-  }
-  out.push(cur);
-  if (out.length > lines) out.length = lines;
-  out[out.length - 1] = ellipsize(out[out.length - 1]!, width, cls);
-  return out;
+/** A label cut to `width` with an ellipsis after `lines` lines (CSS text-overflow). */
+function clipped(cls: string, text: string, width: number, lines = 1, id?: string): void {
+  let u = ui.style(cls, { width, text: { overflow: "ellipsis", maxLines: lines } });
+  if (id) u = u.id(id);
+  u.label(text);
 }
 /** An image cover-fitted into a box with rounded corners (the panel colour while it loads). */
 function art(id: string, path: string, w: number, h: number, radius: number): void {
@@ -122,7 +93,7 @@ function art(id: string, path: string, w: number, h: number, radius: number): vo
 }
 /** A table cell `width` wide (the old <td>, text-align left or right). */
 function cell(id: string, text: string, width: number, cls = "cell", right = false): void {
-  ui.column(id, () => { ui.style(cls).label(ellipsize(text, width - 4, cls)); }, { width, align: right ? "end" : "start" });
+  ui.column(id, () => { ui.style(cls, { text: { overflow: "ellipsis" } }).label(text); }, { width, align: right ? "end" : "start", padding: right ? { start: 4 } : { end: 4 } });
 }
 const keyName = (action: string): string => (bindingLabel(action, "keyboard") || "—").replace(/^Arrow /, "").replace(/^Escape$/, "Esc");
 
@@ -163,10 +134,8 @@ function topBar(L: Layout): number {
       const tw = Math.max(40, L.lw - 28.8 - btns - (narrowPortrait ? 0 : textWidth("Five Dice", "game-title") + 12) - 12);
       const text = app.hud ? hudStatus() : statusLine();
       if (narrowPortrait) {
-        ui.column("status-col", () => {
-          wrapLines(text, tw, "status-sm", 2).forEach((line, i) => ui.style("status-sm").id(`status-${i}`).label(line));
-        }, { width: tw, spacing: 0 });
-      } else ui.column("status-col", () => { ui.style("status").id("session-status").label(ellipsize(text, tw, "status")); }, { width: tw });
+        ui.column("status-col", () => { clipped("status-sm", text, tw, 2, "session-status"); }, { width: tw, spacing: 0 });
+      } else ui.column("status-col", () => { clipped("status", text, tw, 1, "session-status"); }, { width: tw });
       ui.spacer();
       if (app.hud) {
         if (ui.style("icon-btn").id("btn-pause").widget(T("Pause"), {
@@ -277,7 +246,7 @@ function scorecard(st: State, w: number, avail: number): void {
   }
   const b = totalsBreakdown(me.scores) as { upper: number; bonus: number; lower: number; grand: number };
   ui.row("totals", () => {
-    ui.style("cell-strong").label(ellipsize(T("Upper {upper} · Bonus {bonus} · Lower {lower}", b), w - 70, "cell-strong"));
+    clipped("cell-strong", T("Upper {upper} · Bonus {bonus} · Lower {lower}", b), w - 70);
     ui.spacer();
     ui.style("cell-strong").id("grand-total").label(`Σ ${b.grand}`);
   }, { style: "totals-row", width: w, align: "center", padding: { top: 6.4, bottom: 4.8, start: 6.4, end: 6.4 } });
@@ -293,7 +262,7 @@ function tableRail(st: State, w: number): void {
       const cur = i === st.current;
       ui.row(`pl-${i}`, () => {
         if (cur) ui.style("cell-me").label("▶");
-        ui.style("cell").label(ellipsize(playerName(pl.name) + (pl.isAI ? " 🤖" : ""), w - 80, "cell"));
+        clipped("cell", playerName(pl.name) + (pl.isAI ? " 🤖" : ""), w - 80);
         ui.spacer();
         ui.style("cell").id(`pl-score-${i}`).label(String(b.grand));
       }, { style: cur ? "player-row-current" : "player-row", width: w, align: "center", spacing: 6 });

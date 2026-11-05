@@ -15,8 +15,10 @@
 // synthesized stand-ins the browser build played while a sample decoded (and
 // its synthesized room noise before the hearth loop) are not ported (a live
 // synthesis graph makes clip loads fail on the engine's web runtime), so a
-// clip still loading is silent. Clips load once the mixer runs (natively at
-// once, in a browser after the first press), one at a time. Seeded variants
+// clip still loading is silent. The clips all load at once in onStart (every
+// loaded clip reaches the mixer, natively and on the web); the hearth loop
+// and the music start once the mixer runs (in a browser after the first
+// press). Seeded variants
 // (createStream('audio-variants')) keep the music the same on replays.
 import { context, createClip, loadClip, play as playClip, type AudioClip, type Sound } from "starhermit:audio";
 import { createStream, getCategory, UPPER_BONUS_THRESHOLD } from "../js/rules.js";
@@ -30,31 +32,25 @@ const CLIPS = [
 const AMBIENCE = "ambience-hearth";
 
 const clips = new Map<string, AudioClip>();
-const queue: string[] = [];
-let loading = false;
-let wantClips = false;
 let suspended = false;
 let captionHook: ((key: string, vars?: Record<string, string | number>) => void) | null = null;
 /** fn(key, vars) for each cue's caption (an English key the UI translates; shown when captions are on). */
 export function onCaption(fn: (key: string, vars?: Record<string, string | number>) => void): void { captionHook = fn; }
 const caption = (key: string, vars?: Record<string, string | number>): void => captionHook?.(key, vars);
 
-function load(name: string): void { if (!queue.includes(name) && !clips.has(name)) queue.push(name); }
-function pump(): void {
-  if (loading || !queue.length) return;
-  const name = queue.shift()!;
-  loading = true;
-  loadClip(`sfx/${name}.opus`).then((c) => { clips.set(name, c); loading = false; }, (e: unknown) => { console.warn(`sfx ${name}: ${String(e)}`); loading = false; });
+/** Loads every clip at once (onStart); a cue whose clip is still loading is skipped. */
+export function loadSfx(): void {
+  for (const name of [AMBIENCE, ...CLIPS]) {
+    loadClip(`sfx/${name}.opus`).then((c) => { clips.set(name, c); }, (e: unknown) => console.warn(`sfx ${name}: ${String(e)}`));
+  }
 }
-/** Asks for the clips; they load once the mixer runs (see update). */
-export function loadSfx(): void { wantClips = true; }
 
 /** Plays a sample (once loaded). */
 function sfx(name: string, gain = 1): void {
   const clip = clips.get(name);
   if (!clip || suspended) return;
   try { playClip(clip, { bus: "effects", gain: LEVEL.effects * gain }); }
-  catch { clips.delete(name); load(name); } // a clip the mixer lost: load it again
+  catch { /* the mixer is full this frame: skip it */ }
 }
 
 interface GameEvent { type: string; rolled?: number[]; held?: boolean; category?: string; points?: number; reason?: string; breakdown?: { bonus: number; upper: number } }
@@ -159,25 +155,16 @@ function music(gainKey: number, clip: AudioClip | undefined): void {
   try { playClip(clip, { bus: "music", gain: gainKey * LEVEL.music }); } catch { /* the mixer is full */ }
 }
 
-/** Each frame: the clips once the mixer runs (one at a time), the music's notes rendered one each 0.2 s after them,
- * the hearth loop, then the music's steps (every 320 ms) by mixer time. */
+/** Each frame once the mixer runs: the hearth loop, the music's notes rendered one each 0.2 s,
+ * then the music's steps (every 320 ms) by mixer time. */
 export function update(): void {
-  if (context.state !== "running") return;
-  if (wantClips) {
-    wantClips = false;
-    load(AMBIENCE);
-    for (const name of CLIPS) load(name);
-    return;
-  }
-  pump();
-  if (suspended) return;
+  if (context.state !== "running" || suspended) return; // starting the loop and the music still waits for the mixer
   const now = context.currentTime;
   if (bonusAt >= 0 && now >= bonusAt) { bonusAt = -1; sfx("score-bonus"); }
   try {
     const amb = clips.get(AMBIENCE);
     // The loop is normalized to -20 LUFS: lifted toward the old synth level (js/audio.js gain 1.6).
     if (amb && !ambience) { ambience = playClip(amb, { bus: "effects", gain: 1.6 * LEVEL.ambience, loop: true }); return; }
-    if (loading || queue.length) return;
     if (notes.length < NOTE_COUNT) {
       if (now >= nextRender) { notes.push(renderNote(notes.length)); nextRender = now + 0.2; }
       return;

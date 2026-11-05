@@ -501,15 +501,16 @@ export function applyLook(next: Look): void {
   const shadows = next.shadows > 0;
   renderer.shadowMap.enabled = shadows;
   keyLight.castShadow = shadows;
-  if (shadows) keyLight.shadow.mapSize = next.shadows;
+  if (shadows) keyLight.shadow.mapSize = next.shadows; // the level's size: at minor 23+ the engine keeps the game's mapSize
   keyLight.shadow.radius = next.shadows >= 4096 ? 3 : 2;
-  renderer.ao = next.ao === "off" ? null : {
-    blendIntensity: 0.75, radius: 0.45, distanceExponent: 1.5, thickness: 1.0, scale: 1.0, samples: next.ao === "high" ? 16 : 8, resolution: next.budget.aoRes,
-    denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: next.ao === "high" ? 6 : 4, rings: 2, samples: next.ao === "high" ? 16 : 8, radiusExponent: 2 },
+  const ao = next.ao, fullAo = !!ao && ao.resolution >= 1; // the engine's "high" AO: full resolution
+  renderer.ao = ao && {
+    blendIntensity: 0.75, radius: 0.45, distanceExponent: 1.5, thickness: 1.0, scale: 1.0, samples: ao.samples, resolution: ao.resolution,
+    denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: fullAo ? 6 : 4, rings: 2, samples: ao.denoiseSamples, radiusExponent: 2 },
   };
   // High threshold: only the fire, embers, moon and specular glints bloom (UnrealBloomPass 0.55, 0.45, 1.25).
   // three r160 page: the engine's r160 UnrealBloomPass model (minor 30) at the page's own strength.
-  renderer.bloom = next.bloom ? { strength: 0.55, radius: 0.45, threshold: 1.25, resolution: next.budget.bloomRes, model: "r160" } : null;
+  renderer.bloom = next.bloom === null ? null : { strength: 0.55, radius: 0.45, threshold: 1.25, resolution: next.bloom, model: "r160" };
   // js/render.js GradeShader (display space): a gentle S-curve, a touch more saturation,
   // warm highlights / cool shadows, the slight black lift (s * 0.975 + 0.018) and the 0.28 vignette.
   renderer.grade = next.grade ? {

@@ -1,0 +1,27 @@
+# Graphics-tier bench (tools/engine-tier-bench.mjs): Journey stage 1 against Pip, the player's first
+# turn measured on the table (three rolls with holds, then the dice at rest) with the fire and embers.
+# It never opens the scorecard, so it plays the same in the render check's 960 × 540 and a wide window.
+until 300 Five Dice
+frames 150
+click =Journey
+until 60 Trail of Sparks
+frames 10
+click =Trail of Sparks 1 — Warming Up
+until 60 Warming Up
+frames 150
+until 1200 Your turn · rolls left 3 · round 1 —
+frames 120
+measure start
+key KeyR 1
+frames 80
+key Digit1 1
+frames 4
+key KeyR 1
+frames 80
+key Digit2 1
+frames 4
+key KeyR 1
+frames 80
+until 300 rolls left 0
+frames 350
+measure stop
