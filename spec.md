@@ -26,13 +26,13 @@ Present tense: this document describes what the shipped game does today. Anythin
 | `native/quality.ts` | The old Low/Balanced/High/Ultra presets and budgets keyed by the runtime's quality tier and level index |
 | `native/audio.ts` | Opus one-shots, the hearth loop and the rendered fireside music on the runtime's buses; captions |
 | `native/platform.ts` | Progress save with cloud merge and foreign-save migration, device storage, the game's options with legacy-settings migration, player, invite link, platform clock, score posting and the global board |
-| `native/style.ts`, `native/i18n.ts` | Theme tokens over `assets/ui-style.json` and the runtime widgets' theme; the interface language → `js/i18n.js` |
+| `native/style.ts`, `native/i18n.ts` | Theme tokens over `assets/ui-style.json` and the runtime widgets' theme; the engine's `strings` in the interface language |
 | `js/rules.js` | Pure deterministic rules engine: categories, scoring, legality, `applyCommand`, rankings, hashing, replay, serialization |
 | `js/ai.js` | Deterministic lodge AI (`ember`, `hearth`, `summit`) using the rules legality API |
 | `js/content.js` | Versioned content: 5 themes, 4 lessons, 40 journey stages, 5 challenges, daily table, practice factory, offline validators |
 | `js/session.js` | Session controller: state machine, validated dispatch, undo snapshots, lesson gating, session clock (`clock.now` / `clock.wall`, injected by the engine client), autosave, replay envelope, results record |
 | `js/progress.js` | Pure save parts: progress document, foreign-save reader, merge, a finished table's progression and achievements, device boards, option validation and the browser build's legacy keys |
-| `js/strings.js`, `js/i18n.js`, `js/t.js` | Translation tables (ES modules), `T`/`setLocale`, and the `T`/`N`/`playerName` helpers |
+| `assets/strings.json` | The engine string tables (English keys; en-GB, es-ES and fr-CA hold their differences) |
 | `assets/ui-style.json` | UI styles converted from `tools/ui-style.css` (`npm run css`) |
 | `assets/textures/*.png` | The procedural room/flame/glow/tray textures and pip bump maps baked once from the browser build's canvas code (`npm run textures`) |
 | `assets/key-art.webp`, `results-win.webp`, `results-lose.webp` | Title backdrop, results illustrations |
@@ -230,7 +230,7 @@ Lights (the browser build's three.js r160 intensities): warm key directional lig
 
 Every player-facing string ships in nine locales: **en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT**.
 
-- **Tables.** English source strings are the keys. `js/strings.js` holds rows of [English, es-419, de-DE, fr-FR, pt-BR, it-IT]; en-GB, es-ES and fr-CA list only their differences and fall back to en-US, es-419 and fr-FR. The StarHermit account strings are rows of the same table. "Five Dice", "StarHermit" and the opponents' names are names; the generic seats *You*, *Lodge Guide*, *Guest* and *Player N* are translated.
+- **Tables.** English source strings are the keys. `assets/strings.json` holds the engine's tables; en-GB, es-ES and fr-CA list only their differences and fall back to en-US, es-419 and fr-FR. The StarHermit account strings are rows of the same table. "Five Dice", "StarHermit" and the opponents' names are names; the generic seats *You*, *Lodge Guide*, *Guest* and *Player N* are translated.
 - **Language.** The runtime's interface language (`preferences().language`: the player's choice in Options → Language, else the account's preferred language or the device's) picks the nearest shipped locale (`native/i18n.ts`: `en-AU → en-GB`, `es-ES`, `fr-CA` by region, other `es/fr/pt/de/it` to their primary locale) and switches live: every frame is built from the current language, so open dialogs and the HUD follow at once. The runtime's Options replaced the game's own Language selector (`sh-language.js`); the browser build's `ui.language` setting is removed from the account during migration.
 - **What is translated.** Every dialog, the HUD (status line, scorecard rows and their accessible names, bonus meter, table rail, actions, die buttons and HELD), toasts and announcements, invalid-action and hint text (the rules engine returns a `reasonKey`), lesson banners, audio captions, content names and descriptions, status and sync lines.
 
@@ -254,7 +254,7 @@ Every player-facing string ships in nine locales: **en-US, en-GB, es-419, es-ES,
 | Device storage | `fivedice:autosave` (the saved table), `fivedice:results` (last 200 finished tables, for this device's boards), `fivedice:profile` (the guest's name) |
 | Options sync | Theme, palette, camera, captions, left-handed, hold to confirm, haptics, timing assistance and finished lessons are `settings` (`game.<key>`, synced with the account). The browser build's account settings (its mirrored settings keys, `ui.language`, `audio.options`, `graphics.gpu.*`) are adopted where they are still the game's and then removed |
 | Platform clock | `serverNow()` (device clock until it answers): the daily table's UTC date, achievements' unlock times, the replay envelope's offset |
-| Leaderboards | Signed in, every finished table except lessons and forfeits posts its grand total through `score-script.js` (a practice session whose socket carries `{ type: 'result', scores: { 'high-score': n } }`; the script range-checks 0–10,000 and answers `result-ack`), and Results shows "Leaderboard rank: #N" (or posted / not posted). Profile & Scores' Daily and Challenge tabs list the global `high-score` board when signed in; Journey wins and guests see this device's tables |
+| Leaderboards | Signed in, every finished table except lessons and forfeits posts its grand total through `leaderboards.submitScore` (`score-script.js` range-checks 0–10,000), and Results shows "Leaderboard rank: #N" (or posted / not posted). Profile & Scores' Daily and Challenge tabs list the global `high-score` board when signed in; Journey wins and guests see this device's tables |
 | Achievements | Six keys granted idempotently in the progress document and toasted (no platform achievements) |
 | Runtime-owned | Options (volumes, mute, graphics level, frame rate, language, reduced motion, high contrast, text size, key/pad rebinding), report a problem, crash reports, large-screen scaling, safe areas, WebGL context loss |
 | Not used | Rooms, matchmaking, chat, voice, replays; pass-and-play stays on one screen. Results are not server-refereed beyond the score script's range check (single-player tables; see Known limitations) |

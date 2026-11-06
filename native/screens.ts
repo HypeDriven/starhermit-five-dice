@@ -15,7 +15,7 @@
 // buttons, a thumb tray of Roll / Hint / Undo at the bottom, the dice above
 // it), narrow landscape (drawers, the dice in a column at the right, the
 // tray at the bottom left); the left-handed option swaps the drawer buttons.
-import { frame, openMenu } from "starhermit:engine";
+import { frame, openMenu , strings } from "starhermit:engine";
 import { bindingLabel, requestRebind } from "starhermit:input";
 import * as draw from "starhermit:draw";
 import * as ui from "starhermit:ui";
@@ -35,11 +35,9 @@ import { lightTheme } from "./style.ts";
 // ------------------------------------------------------------------ layout
 interface Layout { lw: number; lh: number; sc: number; ox: number; oy: number; wide: boolean; portrait: boolean; phone: boolean; short: boolean }
 function layoutNow(): Layout {
-  const f = frame();
-  const sc = ui.preferences().scale;
-  const sa = f.safeArea;
-  const lw = Math.max(1, (f.width - sa.left - sa.right) / sc), lh = Math.max(1, (f.height - sa.top - sa.bottom) / sc);
-  return { lw, lh, sc, ox: sa.left / sc, oy: sa.top / sc, wide: lw >= 1024, portrait: lh >= lw, phone: lw < 560, short: lh < 500 };
+  const v = ui.viewport!();
+  const lw = Math.max(1, v.width), lh = Math.max(1, v.height);
+  return { lw, lh, sc: v.scale, ox: v.x, oy: v.y, wide: lw >= 1024, portrait: lh >= lw, phone: lw < 560, short: lh < 500 };
 }
 const lastHeight = new Map<string, number>();
 const pr = (): ui.UiPreferences => ui.preferences();
@@ -121,7 +119,7 @@ export function drawScreens(): void {
   if (st) stageHud(L, stage, st);
   if (app.modals.includes("title")) titlePage(L);
   dialogs(L);
-  toastAndCaption(L, stage);
+  soundCaption(stage);
 }
 
 // ------------------------------------------------------------------ top bar
@@ -418,8 +416,8 @@ function titlePage(L: Layout): void {
   items.push({ id: "m-learn", label: T("Learn"), sub: T("interactive lessons, one rule at a time"), act: () => openModal("learn") });
   items.push({ id: "m-challenges", label: T("Challenges"), sub: T("constrained tables for sharp players"), act: () => openModal("challenges") });
   items.push({ id: "m-profile", label: T("Profile & Scores"), sub: T("achievements, leaderboards, stats"), act: () => { loadBoard(app.board?.key ?? "daily", app.board?.label ?? N("Daily tables")); openModal("profile"); } });
-  if (!platform.signedIn()) items.push({ id: "m-signin", label: T("Sign in with StarHermit"), sub: T("sync progress and settings to your account"), act: signIn });
-  if (platform.inviteLink()) items.push({ id: "m-invite", label: T("Invite a friend"), sub: T("copy a link that adds you as friends"), act: copyInvite });
+  if (!platform.signedIn()) items.push({ id: "m-signin", label: strings.t("starhermit.signIn"), sub: T("sync progress and settings to your account"), act: signIn });
+  if (platform.inviteLink()) items.push({ id: "m-invite", label: strings.t("starhermit.invite"), sub: T("copy a link that adds you as friends"), act: copyInvite });
   items.push({ id: "m-help", label: T("Help & Rules"), sub: T("how a table works"), act: () => openModal("help") });
   items.push({ id: "m-settings", label: T("Settings"), sub: T("audio, display, language, graphics, controls"), act: () => openModal("settings") });
   const h = lastHeight.get("title") ?? 0;
@@ -757,16 +755,8 @@ function resultsDialog(L: Layout): void {
 }
 const next0 = (): string => (nextStage() ? "btn-next" : "btn-again");
 
-// ------------------------------------------------------------------ toasts and captions
-function toastAndCaption(L: Layout, stage: Rect): void {
-  const tt = app.toast;
-  if (tt) {
-    const w = Math.min(L.lw * 0.9, 560);
-    ui.place("toast", { anchor: "bottom", y: 112 }, () => {
-      if (textWidth(tt.text, "toast") + 34 <= w) ui.style("toast").id("toast").label(tt.text);
-      else ui.style("toast").id("toast").paragraph(tt.text, w - 34);
-    });
-  }
+// ------------------------------------------------------------------ captions
+function soundCaption(stage: Rect): void {
   const c = app.caption;
   if (c) {
     ui.place("caption", { anchor: "top-start", x: stage.x + 9.6, y: stage.y + stage.h - 40 }, () => ui.row("caption-row", () => {

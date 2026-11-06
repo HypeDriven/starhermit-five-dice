@@ -10,8 +10,7 @@ import { codeKeys, audit, LOCALES } from './i18n-common.mjs';
 import { CATEGORIES } from '../js/rules.js';
 import { THEMES, LESSONS, PRACTICE_DIFFICULTIES, TRAILS, STAGE_NAMES, CHALLENGES } from '../js/content.js';
 import { ACHIEVEMENTS } from '../js/progress.js';
-import { FD_STRINGS } from '../js/strings.js';
-import { T, setLocale, LOCALES as SHIPPED } from '../js/i18n.js';
+const FD_STRINGS = JSON.parse(readFileSync(new URL('../assets/strings.json', import.meta.url), 'utf8'));
 
 const ROOT = new URL('../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, ROOT), 'utf8');
@@ -47,18 +46,10 @@ test('every used key is translated in every locale; placeholders intact; no stal
   assert.deepEqual(audit(FD_STRINGS, usedKeys()), []);
 });
 
-test('the locale switches live and regional tables inherit', () => {
-  assert.deepEqual(SHIPPED, LOCALES);
-  setLocale('de-DE');
-  assert.equal(T('Leave table'), 'Tisch verlassen');
-  setLocale('fr-CA');
-  assert.equal(T('Leave table'), 'Quitter la table');
-  assert.equal(T('Score posted to the leaderboard.'), 'Pointage publié au classement.');
-  setLocale('es-ES');
-  assert.equal(T('Roll ({n})', { n: 2 }), 'Tirar (2)');
-  setLocale('en-GB');
-  assert.equal(T('Color-vision palette'), 'Colour-vision palette');
-  setLocale('xx');
-  assert.equal(T('Leave table'), 'Leave table');
-  setLocale('en-US');
+test('the tables hold every locale and the regional differences', () => {
+  assert.deepEqual(Object.keys(FD_STRINGS), LOCALES);
+  assert.equal(FD_STRINGS['de-DE']['Leave table'], 'Tisch verlassen');
+  assert.equal(FD_STRINGS['fr-FR']['Leave table'], 'Quitter la table');
+  assert.equal(FD_STRINGS['en-GB']['Color-vision palette'], 'Colour-vision palette');
+  assert.equal(FD_STRINGS['en-US']['Leave table'], 'Leave table');
 });

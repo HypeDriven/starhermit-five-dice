@@ -10,17 +10,15 @@
 // the volumes and the mute): music → "music", effects and ambience →
 // "effects" (voice carried nothing); the old default bus levels (music
 // 50 % × 0.45, effects 80 %, ambience 40 % × 0.4) are folded into each
-// sound's gain. The music's oscillator notes are rendered once into clips
-// (createClip) with the old envelope (8 ms attack, exponential decay); the
+// sound's gain. The music's oscillator notes are rendered once offline in
+// onStart with the old envelope (8 ms attack, exponential decay); the
 // synthesized stand-ins the browser build played while a sample decoded (and
-// its synthesized room noise before the hearth loop) are not ported (a live
-// synthesis graph makes clip loads fail on the engine's web runtime), so a
-// clip still loading is silent. The clips all load at once in onStart (every
-// loaded clip reaches the mixer, natively and on the web); the hearth loop
-// and the music start once the mixer runs (in a browser after the first
-// press). Seeded variants
+// its synthesized room noise before the hearth loop) are not ported, so a
+// clip still loading is silent. The clips all load at once in onStart; the
+// hearth loop and the music start once the mixer runs (in a browser after the
+// first press). Seeded variants
 // (createStream('audio-variants')) keep the music the same on replays.
-import { context, createClip, loadClip, play as playClip, type AudioClip, type Sound } from "starhermit:audio";
+import { context, createClip, loadClip, OfflineAudioContext, play as playClip, type AudioClip, type Sound } from "starhermit:audio";
 import { createStream, getCategory, UPPER_BONUS_THRESHOLD } from "../js/rules.js";
 
 const LEVEL = { music: 0.5 * 0.45, effects: 0.8, ambience: 0.4 * 0.4 };
@@ -43,6 +41,7 @@ export function loadSfx(): void {
   for (const name of [AMBIENCE, ...CLIPS]) {
     loadClip(`sfx/${name}.opus`).then((c) => { clips.set(name, c); }, (e: unknown) => console.warn(`sfx ${name}: ${String(e)}`));
   }
+  renderNotes();
 }
 
 /** Plays a sample (once loaded). */
@@ -114,33 +113,39 @@ export function undo(): void { sfx("undo-sweep"); }
 // -- the hearth loop and the music stem -------------------------------------------------------
 const RATE = 22050;
 /** js/audio.js blip(): an oscillator with an 8 ms linear attack to `gain`, then an exponential decay to 0.0001 over `dur`. */
-function blipClip(freq: number, dur: number, type: "sine" | "triangle"): AudioClip {
-  const n = Math.round((dur + 0.02) * RATE);
-  const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const t = i / RATE;
-    const ph = (t * freq) % 1;
-    const wave = type === "sine" ? Math.sin(ph * 2 * Math.PI) : 1 - 4 * Math.abs(ph - 0.5);
-    const env = t < 0.008 ? t / 0.008 : Math.pow(0.0001, Math.min(1, (t - 0.008) / Math.max(0.001, dur - 0.008)));
-    out[i] = wave * env;
-  }
-  return createClip([out], RATE);
+async function renderBlip(index: number, freq: number, dur: number, type: "sine" | "triangle"): Promise<void> {
+  const off = new OfflineAudioContext(1, Math.round((dur + 0.02) * RATE), RATE);
+  const osc = off.createOscillator();
+  osc.type = type;
+  osc.frequency.value = freq;
+  const gain = off.createGain();
+  gain.gain.setValueAtTime(0, 0);
+  gain.gain.linearRampToValueAtTime(1, 0.008);
+  gain.gain.exponentialRampToValueAtTime(0.0001, dur);
+  osc.connect(gain).connect(off.destination);
+  osc.start();
+  const r = await off.startRendering();
+  notes[index] = createClip(r);
+  rendered++;
 }
 const SCALE = [262, 294, 330, 392, 440, 523, 587];
 /** Rendered notes: index i < 7 the scale (0.55 s), 7..13 their fifths (0.4 s), 14 the low triangle (1.3 s). */
 const notes: AudioClip[] = [];
 const NOTE_COUNT = SCALE.length * 2 + 1;
-function renderNote(i: number): AudioClip {
-  if (i < SCALE.length) return blipClip(SCALE[i]!, 0.55, "sine");
-  if (i < SCALE.length * 2) return blipClip(SCALE[i - SCALE.length]! * 1.5, 0.4, "sine");
-  return blipClip(131, 1.3, "triangle");
+let rendered = 0;
+function renderNotes(): void {
+  const failed = (e: unknown): void => console.warn(`audio: ${String(e)}`);
+  SCALE.forEach((f, i) => {
+    renderBlip(i, f, 0.55, "sine").catch(failed);
+    renderBlip(SCALE.length + i, f * 1.5, 0.4, "sine").catch(failed);
+  });
+  renderBlip(SCALE.length * 2, 131, 1.3, "triangle").catch(failed);
 }
 const stream = createStream("audio-variants");
 let ambience: Sound | null = null;
 let nextStep = 0;
 let step = 0;
 let intensity = 0;
-let nextRender = 0;
 let fifthAt = -1;
 let fifthNote = 0;
 /** A score raises the music's density for a while (js/audio.js excite). */
@@ -155,8 +160,7 @@ function music(gainKey: number, clip: AudioClip | undefined): void {
   try { playClip(clip, { bus: "music", gain: gainKey * LEVEL.music }); } catch { /* the mixer is full */ }
 }
 
-/** Each frame once the mixer runs: the hearth loop, the music's notes rendered one each 0.2 s,
- * then the music's steps (every 320 ms) by mixer time. */
+/** Each frame once the mixer runs: the hearth loop, then the music's steps (every 320 ms) by mixer time. */
 export function update(): void {
   if (context.state !== "running" || suspended) return; // starting the loop and the music still waits for the mixer
   const now = context.currentTime;
@@ -165,10 +169,7 @@ export function update(): void {
     const amb = clips.get(AMBIENCE);
     // The loop is normalized to -20 LUFS: lifted toward the old synth level (js/audio.js gain 1.6).
     if (amb && !ambience) { ambience = playClip(amb, { bus: "effects", gain: 1.6 * LEVEL.ambience, loop: true }); return; }
-    if (notes.length < NOTE_COUNT) {
-      if (now >= nextRender) { notes.push(renderNote(notes.length)); nextRender = now + 0.2; }
-      return;
-    }
+    if (rendered < NOTE_COUNT) return;
   } catch (e) { console.warn(`audio: ${String(e)}`); return; }
   if (fifthAt >= 0 && now >= fifthAt) { fifthAt = -1; music(0.06, notes[SCALE.length + fifthNote]); }
   if (now < nextStep) return;

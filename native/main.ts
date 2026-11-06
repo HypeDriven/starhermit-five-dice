@@ -23,7 +23,7 @@
 // (js/session.js clock.now) reads them, and the countdown, the AI's pacing,
 // the results' delay, the clock heartbeat and toasts wait on the same steps,
 // so play scripts replay exactly.
-import { clipboard, frame, levelSettings, onFixedUpdate, onPreferencesChange, onQuit, onRender, onResume, onStart, onSuspend, onUpdate, preferences, setFixedRate } from "starhermit:engine";
+import { strings, clipboard, frame, levelSettings, onFixedUpdate, onPreferencesChange, onQuit, onRender, onResume, onStart, onSuspend, onUpdate, preferences, setFixedRate } from "starhermit:engine";
 import { onAction, onPointerButton, onTouch, vibrate } from "starhermit:input";
 import * as ui from "starhermit:ui";
 import { onSessionEnded, requestSignIn } from "starhermit:platform";
@@ -86,7 +86,6 @@ export const app = {
   modalOpened: 0,
   hud: false,
   countdown: null as number | null,
-  toast: null as { text: string; until: number } | null,
   caption: null as { text: string; until: number } | null,
   confirm: null as { text: () => string; yes: () => void } | null,
   results: null as { record: ResultRecord; won: boolean; newly: string[] } | null,
@@ -103,8 +102,12 @@ export let results: unknown[] = [];
 // ------------------------------------------------------------------ helpers
 export const now = (): number => fixedMs;
 export function announce(text: string): void { if (text) ui.announce(String(text).slice(0, 500)); }
-/** ui.js toast(): one at a time, 2.6 s by default. */
-export function toast(text: string, ms = 2600): void { app.toast = { text, until: fixedMs + ms }; }
+/** ui.js toast(): one at a time, 2.6 s by default, 96 px past the stack's 16 px margin (clears the action tray). */
+let lastToast: ReturnType<NonNullable<typeof ui.toast>> | null = null;
+export function toast(text: string, ms = 2600): void {
+  lastToast?.dismiss();
+  lastToast = ui.toast!(text, { duration: ms / 1000, style: "toast", dismissible: false, announce: false, position: "bottom", offset: 96 });
+}
 function haptic(ms: number): void { if (options.haptics) { try { vibrate(ms); } catch { /* no motor */ } } }
 const CVD: Record<string, { select: string; legal: string }> = {
   // Colour-vision-safe selection and legal-move colours (always with shape/label cues as well).
@@ -455,9 +458,9 @@ function showResults(record: ResultRecord, won: boolean): void {
 export function leaderboardLine(): string | null {
   const lb = app.lb;
   if (!lb) return null;
-  if (lb === "posting") return T("Posting score to the leaderboard…");
-  if (!lb.posted) return T("Score not posted to the leaderboard.");
-  return lb.rank ? T("Leaderboard rank: #{rank}", { rank: lb.rank }) : T("Score posted to the leaderboard.");
+  if (lb === "posting") return strings.t("starhermit.leaderboardPosting");
+  if (!lb.posted) return strings.t("starhermit.leaderboardNotPosted");
+  return lb.rank ? strings.t("starhermit.leaderboardRank", { rank: lb.rank }) : strings.t("starhermit.leaderboardPosted");
 }
 /** The results card's next table: the journey's next stage after a win, then Play again. */
 export function nextStage(): Def | null {
@@ -491,8 +494,8 @@ export function setGuestName(name: string): void {
 export function copyInvite(): void {
   const link = platform.inviteLink();
   if (!link) return;
-  try { clipboard.writeText(link); toast(T("Invite link copied to clipboard")); }
-  catch { toast(T("Could not copy the invite link")); }
+  try { clipboard.writeText(link); toast(strings.t("starhermit.inviteCopied")); }
+  catch { toast(strings.t("starhermit.inviteFailed")); }
 }
 export function signIn(): void { void requestSignIn().catch(() => undefined); }
 export function statusLine(): string {
@@ -586,7 +589,7 @@ platform.onOptionsChange(applyOptions);
 platform.onAdopt(() => toast(T("Progress is synced to your account.")));
 let wasSignedIn = false;
 platform.onPlayer(() => {
-  if (wasSignedIn && !platform.signedIn()) toast(T("Signed out of StarHermit — progress keeps saving on this device."));
+  if (wasSignedIn && !platform.signedIn()) toast(strings.t("starhermit.signedOut"));
   wasSignedIn = platform.signedIn();
 });
 audio.onCaption((key, vars) => { if (options.captions) app.caption = { text: T(key, vars), until: fixedMs + pace(2600) }; });
@@ -611,7 +614,7 @@ onStart(() => {
   if (session.hasSnapshot()) toast(T("A saved table is waiting — Resume from the title menu."));
 });
 onPreferencesChange((p) => render.setReducedMotion(p.reducedMotion));
-onSessionEnded(() => toast(T("Signed out of StarHermit — progress keeps saving on this device.")));
+onSessionEnded(() => toast(strings.t("starhermit.signedOut")));
 let hidden = false;
 onSuspend(() => {
   hidden = true;
@@ -629,7 +632,6 @@ onFixedUpdate(() => {
   if (hidden) return;
   fixedMs += STEP_MS;
   runTimers();
-  if (app.toast && app.toast.until < fixedMs) app.toast = null;
   if (app.caption && app.caption.until < fixedMs) app.caption = null;
 });
 let frameDt = 0;
