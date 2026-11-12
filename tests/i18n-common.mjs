@@ -1,6 +1,6 @@
 // Localization coverage helpers (adapted from the chess repo's tests).
 
-export const LOCALES = ['en-US', 'en-GB', 'es-419', 'es-ES', 'de-DE', 'fr-FR', 'fr-CA', 'pt-BR', 'it-IT'];
+export const LOCALES = ['en-US', 'en-GB', 'es-419', 'es-ES', 'de-DE', 'fr-FR', 'fr-CA', 'pt-BR', 'it-IT', 'fr-BE', 'de-BE', 'en-SG', 'en-HK', 'en-BQ', 'es-CO', 'de-IT', 'fr-IT', 'es-CL', 'es-AR', 'es-EC', 'ja-JP', 'nl-BE', 'de-BR', 'zh-SG', 'ms-SG', 'zh-HK', 'nl-NL', 'fi-FI', 'sv-FI', 'et-EE', 'id-ID', 'vi-VN', 'ta-SG', 'da-DE', 'lb-BE', 'eu-FR', 'ca-FR', 'oc-FR', 'yue-HK', 'sl-IT', 'ca-IT', 'oc-IT', 'ru-FI', 'ca-ES', 'eu-ES', 'gl-ES', 'ru-EE', 'su-ID', 'km-VN', 'co-FR', 'fur-IT', 'bew-ID'];
 export const FULL = ['es-419', 'de-DE', 'fr-FR', 'pt-BR', 'it-IT'];
 
 export const norm = (s) => String(s).replace(/\s+/g, ' ').trim();

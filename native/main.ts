@@ -1,3 +1,4 @@
+import { withLanguageRender as __l10nRender } from "./l10n/menu.ts";
 // Five Dice on the StarHermit engine: the entry module (starhermit.txt
 // engine.entry), played natively by the StarHermit client and in browsers by
 // the engine's web runtime. The rules (js/rules.js), the lodge AI (js/ai.js),
@@ -640,8 +641,12 @@ onUpdate((dt) => {
   applyLook();
   audio.update();
 });
-onRender(() => {
+onRender(__l10nRender(() => {
   drawScreens();
   stageInput();
   render.update(frameDt);
-});
+}));
+
+// localization-runtime:menu
+import { installLanguageMenu as __installLanguageMenu } from "./l10n/menu.ts";
+__installLanguageMenu(false);

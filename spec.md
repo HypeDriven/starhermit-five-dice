@@ -317,3 +317,11 @@ Every player-facing string ships in nine locales: **en-US, en-GB, es-419, es-ES,
 
 - Platform achievements and hosted pass-and-play across devices (would need a refereeing server script).
 - Machine states `title`, `mode-select`, `reconnecting` driven by the UI so the state machine mirrors every screen.
+
+<!-- regional-localization:start -->
+
+### Regional interface languages
+
+The string tables include complete regional variants for `fr-BE`, `de-BE`, `en-SG`, `en-HK`, `en-BQ`, `es-CO`, `de-IT`, `fr-IT`, `es-CL`, `es-AR`, `es-EC`, `de-BR`. These reuse the corresponding existing translations in their language family. The runtime can resolve the exact regional tag. Language selection is available from the game’s Options panel or F2 and is saved per player in `ui.language`. Changes apply during play. Additional national, regional and indigenous language packs are only shipped once every English message has a translation with intact placeholders and markup. Complete additional language tables: `ja-JP`, `nl-BE`, `zh-SG`, `ms-SG`, `zh-HK`, `nl-NL`, `fi-FI`, `sv-FI`, `et-EE`, `id-ID`, `vi-VN`, `ta-SG`, `da-DE`, `lb-BE`, `eu-FR`, `ca-FR`, `oc-FR`, `yue-HK`, `sl-IT`, `ca-IT`, `oc-IT`, `ru-FI`, `ca-ES`, `eu-ES`, `gl-ES`, `ru-EE`, `su-ID`, `km-VN`, `co-FR`, `fur-IT`, `bew-ID`.
+
+<!-- regional-localization:end -->
