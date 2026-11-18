@@ -11,7 +11,7 @@ Present tense: this document describes what the shipped game does today. Anythin
 | Genre | Turn-based dice / scorecard game (classic five-dice math, original names and setting) |
 | Players | 1–4 seats per table: solo target climbs, 1 human vs 1–3 lodge AI, or two humans pass-and-play on one screen |
 | Session | 13 rounds per player; ~4–6 min vs one AI, ~8 min four-handed; a Learn lesson ~3 min |
-| Platforms | StarHermit engine 1.39.0 script game (host API 1.39): natively in the StarHermit client and in desktop and mobile browsers through the engine's web runtime (portrait and landscape); keyboard, mouse, touch, gamepad |
+| Platforms | StarHermit engine 1.44.1 script game (host API 1.44): natively in the StarHermit client and in desktop and mobile browsers through the engine's web runtime (portrait and landscape); keyboard, mouse, touch, gamepad |
 | Rendering | `starhermit:scene` lodge table (three.js-style scene graph) behind a `starhermit:ui` immediate-mode HUD; every play action also exists as a UI control |
 | Persistence | `starhermit:storage`: the progress save (device + the player's cloud slot), the game's options (synced with the account), the saved table and round history on the device |
 
@@ -19,7 +19,7 @@ Present tense: this document describes what the shipped game does today. Anythin
 
 | Path | Responsibility |
 |---|---|
-| `starhermit.txt` | Manifest: `name`, `description`, `owner`, `server=score-script.js`, `cover=cover.jpg`, `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.39.0`, `engine.minor=39`, `engine.capabilities=platform,storage,clipboard`, one `control.<action>` and `engine.gamepad.<action>` line per action, `engine.group.*` headings for Options |
+| `starhermit.txt` | Manifest: `name`, `description`, `owner`, `server=score-script.js`, `cover=cover.jpg`, `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.44.1`, `engine.minor=44`, `engine.capabilities=platform,storage,clipboard`, one `control.<action>` and `engine.gamepad.<action>` line per action, `engine.group.*` headings for Options |
 | `native/main.ts` | Entry module: the overlay stack and flow, the round lifecycle, turn controls, AI pacing, countdown, results delay and clock heartbeat on the runtime's fixed steps, session-event presentation (sounds, captions, announcements, toasts, haptics, dice animation), progression and achievements, posting scores, input (actions, taps on the 3D dice), lifecycle (suspend/resume/quit) |
 | `native/screens.ts` | `starhermit:ui` built every frame: top bar, scorecard and table rails (or drawers), stage HUD (lesson banner, action tray, dice tray, countdown), title page over the key art, every dialog, toast and captions |
 | `native/render.ts` | The lodge scene on `starhermit:scene`: table, room, window, fireplace, embers, dice and their animation, camera presets, the look per graphics level, die picking |
@@ -247,7 +247,7 @@ Every player-facing string ships in nine locales: **en-US, en-GB, es-419, es-ES,
 
 | Feature | Status |
 |---|---|
-| Engine | Script game on the StarHermit engine 1.39.0 (`engine.minor=39`), capabilities `platform`, `storage`, `clipboard`; browsers load `index.html` (the engine's loader, pinned by hash on wiki.starhermit.com) |
+| Engine | Script game on the StarHermit engine 1.44.1 (`engine.minor=44`), capabilities `platform`, `storage`, `clipboard`; browsers load `index.html` (the engine's loader, pinned by hash on wiki.starhermit.com) |
 | Player | `starhermit:platform` `player()`: the display name in the status line and Profile & Scores; guests edit a local display name (≤20 chars) kept on the device |
 | Sign-in / invite | Guests see **Sign in with StarHermit** on the title (`requestSignIn`); signed-in players **Invite a friend** (copies `inviteLink()` to the clipboard). Signing out mid-session toasts that progress keeps saving on this device |
 | Cloud save | The progress document (`v`, `rev`, journey, challenges, achievements, totals, streakDays, bestDaily) is the game's `saves` save (schema 1): on the device and, signed in, in the account slot. A conflict between devices merges both (larger of each lifetime total, union of cleared stages/challenges, achievements with the earliest unlock, active days, the better best score and stars, `rev` above both); the account's copy replacing the device's is merged in the same way. The browser build's cloud save (the JS SDK's `saveJSON` of the same document, key `game:<slug>`) shows as foreign: it is read, merged into this device's progress and replaced once (`replaceForeign`). Guests' old browser `localStorage` progress cannot be migrated |
@@ -256,7 +256,7 @@ Every player-facing string ships in nine locales: **en-US, en-GB, es-419, es-ES,
 | Platform clock | `serverNow()` (device clock until it answers): the daily table's UTC date, achievements' unlock times, the replay envelope's offset |
 | Leaderboards | Signed in, every finished table except lessons and forfeits posts its grand total through `leaderboards.submitScore` (`score-script.js` range-checks 0–10,000), and Results shows "Leaderboard rank: #N" (or posted / not posted). Profile & Scores' Daily and Challenge tabs list the global `high-score` board when signed in; Journey wins and guests see this device's tables |
 | Achievements | Six keys granted idempotently in the progress document and toasted (no platform achievements) |
-| Runtime-owned | Options (volumes, mute, graphics level, frame rate, language, reduced motion, high contrast, text size, key/pad rebinding), report a problem, crash reports, large-screen scaling, safe areas, WebGL context loss |
+| Runtime-owned | Options (volumes, mute, graphics level, frame rate, language, reduced motion, high contrast, text size, key/pad rebinding), report a problem, crash reports, large-screen scaling, safe areas, WebGPU device loss |
 | Not used | Rooms, matchmaking, chat, voice, replays; pass-and-play stays on one screen. Results are not server-refereed beyond the score script's range check (single-player tables; see Known limitations) |
 
 ## 13. Technical architecture
@@ -325,3 +325,9 @@ Every player-facing string ships in nine locales: **en-US, en-GB, es-419, es-ES,
 The string tables include complete regional variants for `fr-BE`, `de-BE`, `en-SG`, `en-HK`, `en-BQ`, `es-CO`, `de-IT`, `fr-IT`, `es-CL`, `es-AR`, `es-EC`, `de-BR`. These reuse the corresponding existing translations in their language family. The runtime can resolve the exact regional tag. Language selection is available from the game’s Options panel or F2 and is saved per player in `ui.language`. Changes apply during play. Additional national, regional and indigenous language packs are only shipped once every English message has a translation with intact placeholders and markup. Complete additional language tables: `ja-JP`, `nl-BE`, `zh-SG`, `ms-SG`, `zh-HK`, `nl-NL`, `fi-FI`, `sv-FI`, `et-EE`, `id-ID`, `vi-VN`, `ta-SG`, `da-DE`, `lb-BE`, `eu-FR`, `ca-FR`, `oc-FR`, `yue-HK`, `sl-IT`, `ca-IT`, `oc-IT`, `ru-FI`, `ca-ES`, `eu-ES`, `gl-ES`, `ru-EE`, `su-ID`, `km-VN`, `co-FR`, `fur-IT`, `bew-ID`.
 
 <!-- regional-localization:end -->
+
+## Engine 1.44.1
+
+Browser play uses the WebGPU-only StarHermit 1.44.1 web runtime. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
+
+The help screen replays through retained native UI while its contents, options, layout and key bindings are unchanged.

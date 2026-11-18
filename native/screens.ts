@@ -1,3 +1,4 @@
+import { bindings } from "starhermit:input";
 import { localizedStyle as __l10nStyle } from "./l10n/font.ts";
 import { localizedDrawOptions as __l10nDrawOptions } from "./l10n/font.ts";
 // localization-runtime:attached
@@ -117,7 +118,7 @@ function cell(id: string, text: string, width: number, cls = "cell", right = fal
 const keyName = (action: string): string => (bindingLabel(action, "keyboard") || "—").replace(/^Arrow /, "").replace(/^Escape$/, "Esc");
 
 // ------------------------------------------------------------------ the frame
-export function drawScreens(): void {
+function drawScreensImmediate(): void {
   const L = layoutNow();
   const f = frame();
   const t = theme();
@@ -784,4 +785,11 @@ function soundCaption(stage: Rect): void {
       ui.style(__l10nStyle("caption")).id("caption").label(`♪ ${c.text}`);
     }, { style: "caption-box", align: "center" }));
   }
+}
+
+export function drawScreens(): void {
+  if (!(topModal() === "help")) { drawScreensImmediate(); return; }
+  const actions = ["hold0","hold1","hold2","hold3","hold4","roll","hint","undo","pause","camera","focus_prev","focus_next","confirm"];
+  const version = JSON.stringify([(app as any).settings ?? (app as any).options ?? {}, (platform as any).options ?? {}, actions.map((action) => bindings(action))]);
+  ui.retain!("help-screen", version, drawScreensImmediate);
 }
