@@ -519,6 +519,7 @@ export function applyLook(next: Look): void {
     vignette: { amount: 0.28, inner: 0.32, outer: 0.85, scale: [1.1, 1.0] },
   } : null;
   renderer.antialias = next.antialias;
+  renderer.motionBlur = next.bloom !== null ? { intensity: 0.25, samples: 8, maxPixels: 16, targetFps: 60, camera: false } : null;
   dirty = true;
 }
 /** Each frame (dt in seconds): tweens, the fire's flicker, star twinkle and ember drift. */
