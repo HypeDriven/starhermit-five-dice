@@ -1,3 +1,4 @@
+import { showCursor } from "./cursor.ts";
 import { withLanguageRender as __l10nRender } from "./l10n/menu.ts";
 // Five Dice on the StarHermit engine: the entry module (starhermit.txt
 // engine.entry), played natively by the StarHermit client and in browsers by
@@ -596,6 +597,7 @@ platform.onPlayer(() => {
 audio.onCaption((key, vars) => { if (options.captions) app.caption = { text: T(key, vars), until: fixedMs + pace(2600) }; });
 
 onStart(() => {
+  showCursor();
   setFixedRate(60);
   initStyles(theme());
   platform.initPlatform();
