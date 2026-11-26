@@ -12,7 +12,7 @@
     "metadataSource": "starhermit.txt",
     "createdAt": "2026-09-01T07:01:00.304028+00:00",
     "coverArtSource": "manifest",
-    "coverArtUpdatedAt": "2026-11-23T17:01:42.555257+00:00",
+    "coverArtUpdatedAt": "2026-11-26T15:21:36.649984+00:00",
     "submittedByUserId": "2712e04e-461b-4d23-81ae-e40b429128a8",
     "submittedByUsername": "starhermit",
     "hosting": {
@@ -22,9 +22,9 @@
       "pinnedCommitSha": null,
       "deployedCommitSha": null,
       "deployError": null,
-      "deployedAt": "2026-11-23T17:01:42.545216+00:00",
+      "deployedAt": "2026-11-26T15:21:36.637649+00:00",
       "externalLaunchUrl": null,
-      "engineVersion": "1.47.0",
+      "engineVersion": "1.50.0",
       "deployWarning": null
     },
     "description": "Roll five dice, hold your best results, and choose scoring categories to build the highest total.",
@@ -36,19 +36,19 @@
     "links": [],
     "isDisabled": false
   },
-  "publishedAt": "2026-11-23T17:01:42.660Z",
-  "sourceCommit": "8b7a901e6c93922c77d5515314954a25f76fcee6",
-  "bytesReceived": 5899457,
-  "archiveSha256": "45dcaabe00e4afdcf0d452b27b902c258bde5b6dcbf8e525bda6833cb2021716",
+  "publishedAt": "2026-11-26T15:21:35.909Z",
+  "sourceCommit": "cca6f2bf8925d571f8b216ecbf3a306ac70c29fe",
+  "bytesReceived": 5899295,
+  "archiveSha256": "f19ed903ed1a381cadbd30c5a7695ba492acb41d37574e3ae2b8213113bce281",
   "indexSha256": "37bd0187b00a35bd197449362f421d521798a122c465df2a8f374b3dc653e06a",
   "result": {
     "clientPublished": true,
     "serverImageLoaded": false,
     "imageDigest": null,
-    "bytesReceived": 5899457,
+    "bytesReceived": 5899295,
     "mode": "replace",
     "filesRemoved": 0,
-    "engineVersion": "1.47.0",
+    "engineVersion": "1.50.0",
     "deployWarning": null
   },
   "liveVerification": {
