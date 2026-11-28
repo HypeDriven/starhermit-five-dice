@@ -41,7 +41,6 @@ export function loadSfx(): void {
   for (const name of [AMBIENCE, ...CLIPS]) {
     loadClip(`sfx/${name}.opus`).then((c) => { clips.set(name, c); }, (e: unknown) => console.warn(`sfx ${name}: ${String(e)}`));
   }
-  renderNotes();
 }
 
 /** Plays a sample (once loaded). */
@@ -161,7 +160,17 @@ function music(gainKey: number, clip: AudioClip | undefined): void {
 }
 
 /** Each frame once the mixer runs: the hearth loop, then the music's steps (every 320 ms) by mixer time. */
+let __bedsStarted = false;
+function startBeds(): void {
+  if (__bedsStarted) return;
+  __bedsStarted = true;
+  void (async () => {
+    renderNotes();
+  })();
+}
+
 export function update(): void {
+  startBeds();
   if (context.state !== "running" || suspended) return; // starting the loop and the music still waits for the mixer
   const now = context.currentTime;
   if (bonusAt >= 0 && now >= bonusAt) { bonusAt = -1; sfx("score-bonus"); }

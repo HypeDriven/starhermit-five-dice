@@ -470,10 +470,15 @@ export function updateState(state: DiceState, opts: { animate?: boolean; rolled?
   }
 }
 /** The die under a window point (window px), or null. */
+const pickNdc = new Vector2();
+const dieBodies: Die["body"][] = [];
 export function pickDie(x: number, y: number, W: number, H: number): number | null {
   if (!renderer.camera) return null;
-  raycaster.setFromCamera(new Vector2((x / W) * 2 - 1, -(y / H) * 2 + 1), camera);
-  const hits = raycaster.intersectObjects(dice.map((d) => d.body), false);
+  pickNdc.set((x / W) * 2 - 1, -(y / H) * 2 + 1);
+  raycaster.setFromCamera(pickNdc, camera);
+  dieBodies.length = dice.length;
+  for (let i = 0; i < dice.length; i++) dieBodies[i] = dice[i]!.body;
+  const hits = raycaster.intersectObjects(dieBodies, false);
   if (!hits.length) return null;
   const i = dice.findIndex((d) => d.body === hits[0]!.object);
   return i >= 0 ? i : null;
